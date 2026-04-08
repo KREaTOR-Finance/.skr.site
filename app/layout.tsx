@@ -2,23 +2,14 @@
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: ".skr.site",
-  description: "Your Seeker name, live on the open web 🐦‍⬛",
-  icons: {
-    icon: "/favicon.ico",
-  },
+  title: ".skr Studio",
+  description: "Seeker-native .skr studio with fully on-chain publish and premium unlock",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-zinc-950 text-white antialiased">
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

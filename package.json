@@ -6,11 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@onsol/tldparser": "^1.2.1",
+    "@solana-mobile/wallet-standard-mobile": "^0.5.0",
+    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.4",
+    "arweave": "^1.15.7",
     "next": "16.2.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -23,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

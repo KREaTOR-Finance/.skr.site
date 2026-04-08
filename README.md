@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# .skr Studio Gateway (Web)
 
-## Getting Started
+Seeker-branded web client rebuilt from the Omma prototype into typed Next.js modules.
 
-First, run the development server:
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
+npm run lint
+npm run test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Set the deployed custom program ID:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+NEXT_PUBLIC_SKR_PROGRAM_ID=<deployed_program_pubkey>
+```
 
-## Learn More
+Storage uploader configuration:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# optional: arweave or ipfs (defaults to arweave when ARWEAVE_JWK is present, else ipfs)
+STORAGE_PROVIDER=ipfs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# for Pinata IPFS uploads
+PINATA_JWT=<pinata_jwt>
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# for Arweave uploads (JWK JSON)
+ARWEAVE_JWK=<arweave_jwk_json>
+```
 
-## Deploy on Vercel
+## Current on-chain flow
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Build publish payload (domain/template/hash/uri).
+- Build atomic transaction with:
+  1. `unlock_and_record_publish` custom program instruction.
+  2. ANS `.skr` record writes using live mainnet `Create`/`Update` instruction shape.
+- Sign/send through wallet provider.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Compliance note
+
+- See `docs/compliance.md` for the v1 storage/resolver trust model and upload compliance decision.
