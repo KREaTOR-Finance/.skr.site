@@ -1,0 +1,16 @@
+﻿[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+skr_publish_program = "8krPuBvS8nKkQ5fhqeHAAhY47Y9b6iG6XU4Ut5xtf1fH"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Mainnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
