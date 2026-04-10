@@ -1,19 +1,36 @@
 package com.skrstudio.app.chain
 
-import com.skrstudio.app.TemplateCustomization
+import com.skrstudio.app.CalendarDraft
+import com.skrstudio.app.DaoDraft
+import com.skrstudio.app.HealthDraft
+import com.skrstudio.app.LinkBioDraft
+import com.skrstudio.app.PersonalBioDraft
+import com.skrstudio.app.PortfolioDraft
+import com.skrstudio.app.ShopStoreDraft
+import com.skrstudio.app.SocialHubDraft
+import com.skrstudio.app.TemplateDraft
 
 fun buildTemplateHtml(
     domain: String,
     templateTitle: String,
-    customization: TemplateCustomization,
+    draft: TemplateDraft,
 ): String {
-    val links = customization.links
-        .filter { it.label.isNotBlank() && it.url.isNotBlank() }
-        .mapNotNull { link ->
-            val safeUrl = sanitizeUrl(link.url) ?: return@mapNotNull null
-            "<a class=\"link\" href=\"${escapeHtml(safeUrl)}\">${escapeHtml(link.label)}</a>"
-        }
-        .joinToString("\n")
+    val (headline, subtext, links) = when (draft) {
+        is PersonalBioDraft -> Triple(draft.headline, draft.subtext, draft.links)
+        is SocialHubDraft -> Triple(draft.headline, draft.subtext, draft.socialLinks + draft.web3Links)
+        is ShopStoreDraft -> Triple(draft.headline, draft.subtext, draft.products.map { com.skrstudio.app.LinkItem(it.name, it.price) })
+        is CalendarDraft -> Triple(draft.headline, draft.subtext, draft.events.map { com.skrstudio.app.LinkItem(it.title, it.time) })
+        is HealthDraft -> Triple(draft.headline, draft.subtext, draft.workouts.map { com.skrstudio.app.LinkItem(it.name, "${it.duration} ${it.level}") })
+        is PortfolioDraft -> Triple(draft.headline, draft.subtext, draft.projects + draft.press)
+        is DaoDraft -> Triple(draft.headline, draft.subtext, draft.proposals.map { com.skrstudio.app.LinkItem(it.title, "${it.status} ${it.category}") })
+        is LinkBioDraft -> Triple(draft.headline, draft.subtext, draft.links + draft.supporters.map { com.skrstudio.app.LinkItem(it.name, it.amount) })
+    }
+    val safeLinks = links.filter { it.label.isNotBlank() && it.url.isNotBlank() }
+    val linksHtml = safeLinks.joinToString("\n") { link ->
+        val maybe = sanitizeUrl(link.url)
+        val href = maybe ?: "#"
+        "<a class=\"link\" href=\"${escapeHtml(href)}\">${escapeHtml(link.label)} · ${escapeHtml(link.url)}</a>"
+    }
 
     return """
         <!doctype html>
@@ -23,7 +40,7 @@ fun buildTemplateHtml(
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>$domain</title>
           <style>
-            :root { --bg:#0A0A0A; --teal:${escapeHtml(customization.accentHex)}; --chrome:#BEBEBE; --chromeLight:#E8E8E8; --text:#f0f0f0; --muted:#888; --accentGlow:rgba(0,201,167,.35); }
+            :root { --bg:#0A0A0A; --teal:#00C9A7; --chrome:#BEBEBE; --chromeLight:#E8E8E8; --text:#f0f0f0; --muted:#888; --accentGlow:rgba(0,201,167,.35); }
             body { margin:0; min-height:100vh; background:radial-gradient(circle at top,rgba(232,232,232,.08),transparent 35%),radial-gradient(circle at 20% 80%,rgba(0,201,167,.08),transparent 30%),var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; display:grid; place-items:center; }
             .card { width:min(640px,92vw); background:rgba(255,255,255,.04); border:1px solid rgba(190,190,190,.18); border-radius:24px; padding:32px; box-shadow:0 0 32px rgba(0,201,167,.1); }
             .name { font-size:40px; font-weight:800; margin:0 0 8px; }
@@ -37,10 +54,10 @@ fun buildTemplateHtml(
         </head>
         <body>
           <article class="card">
-            <p class="badge">${escapeHtml(customization.emoji)} ${escapeHtml(templateTitle)}</p>
-            <h1 class="name">${escapeHtml(customization.headline)}<span class="dotSkr">.skr</span></h1>
-            <p class="sub">${escapeHtml(customization.subtext)}</p>
-            <div class="links">$links</div>
+            <p class="badge">${escapeHtml(templateTitle)}</p>
+            <h1 class="name">${escapeHtml(headline)}<span class="dotSkr">.skr</span></h1>
+            <p class="sub">${escapeHtml(subtext)}</p>
+            <div class="links">$linksHtml</div>
           </article>
         </body>
         </html>
