@@ -309,7 +309,7 @@ export default function StudioApp() {
           setOwnedTemplateIds((prev) => Array.from(new Set([...prev, ...premiumTemplateIds])));
         }
       } catch {
-        if (!cancelled) setToast("Unable to sync chain entitlements");
+        if (!cancelled) setToast("We could not check your template access");
       } finally {
         if (!cancelled) setChainSyncing(false);
       }
@@ -408,7 +408,7 @@ export default function StudioApp() {
         setWalletUnlocked(true);
         setOwnedTemplateIds((prev) => Array.from(new Set([...prev, ...premiumTemplateIds])));
       }
-      setToast("Published on-chain successfully");
+      setToast("Your .skr page is live");
       goto("preview");
     } catch (error) {
       setToast(toUserFacingChainError(error));
@@ -647,7 +647,7 @@ export default function StudioApp() {
 
       {screen === "splash" && (
         <section className="center-stack">
-          <Image src="/seeker/ic_seeker_logo.png" alt="Seeker logo" width={170} height={170} className="hero-logo" priority />
+          <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={170} height={170} className="hero-logo brand-logo" priority />
           <h2><span className="shimmer-text">.skr</span> Studio</h2>
           <p>Seeker-native pages. On-chain publish. Premium templates unlocked by SKR.</p>
           <div className="row">
@@ -676,9 +676,9 @@ export default function StudioApp() {
             <h2>{customization.headline}<span className="shimmer-text">.skr</span></h2>
             <p>{customization.subtext}</p>
             <div className="chip-row">
-              <span className="chip">Mainnet</span>
-              <span className="chip">No backend enforcement</span>
-              <span className="chip">Atomic publish tx</span>
+              <span className="chip">Solana</span>
+              <span className="chip">Seeker ready</span>
+              <span className="chip">Wallet approved</span>
             </div>
             <button className="btn btn-primary" onClick={() => nav("templates")}>Choose Template</button>
           </article>
@@ -733,7 +733,7 @@ export default function StudioApp() {
         <section className="grid two">
           <article className="panel card-glow">
             <h2>Wallet Connect</h2>
-            <p>Connect with Solana wallet providers and publish atomically on Mainnet.</p>
+            <p>Connect your Solana wallet to buy templates and publish your .skr page.</p>
             <div className="stack">
               <button className="btn btn-primary" onClick={() => handleConnect("Phantom")}>Connect Phantom</button>
               <button className="btn btn-ghost" onClick={() => handleConnect("Backpack")}>Connect Backpack</button>
@@ -743,13 +743,13 @@ export default function StudioApp() {
               <div className="wallet-box">
                 <strong>{wallet.name}</strong>
                 <span>{walletAddressShort(wallet.publicKey.toBase58())}</span>
-                <small>{walletUnlocked ? "Premium unlocked" : "Premium not unlocked"}</small>
-                <small>{chainSyncing ? "Syncing on-chain entitlements..." : "Entitlements synced"}</small>
+                <small>{walletUnlocked ? "Premium templates ready" : "Premium templates locked"}</small>
+                <small>{chainSyncing ? "Checking your access..." : "Access checked"}</small>
               </div>
             )}
           </article>
           <article className="panel">
-            <Image src="/seeker/image ic logo.jpg" alt="Wallet art" width={420} height={560} className="cover" />
+            <Image src="/brand/skr-logo.jpg" alt=".skr Studio wallet mark" width={420} height={560} className="cover brand-cover" />
           </article>
         </section>
       )}
@@ -757,11 +757,11 @@ export default function StudioApp() {
       {screen === "profile" && (
         <section className="panel card-glow">
           <h2>Creator Profile</h2>
-          <p>Switch templates freely after unlock. Each publish writes a new on-chain content record update transaction.</p>
+          <p>Choose a template, personalize it, and publish a public page for your .skr name.</p>
           <ul className="bullets">
             <li>Domain: {customization.headline.toLowerCase()}.skr</li>
             <li>Template: {selectedTemplate.title}</li>
-            <li>Premium unlock: {walletUnlocked ? "active" : "inactive"}</li>
+            <li>Premium access: {walletUnlocked ? "ready" : "locked"}</li>
           </ul>
           <button className="btn btn-primary" onClick={() => nav("templates")}>Change Template</button>
         </section>
@@ -770,7 +770,7 @@ export default function StudioApp() {
       {screen === "settings" && (
         <section className="panel card-glow">
           <h2>Settings</h2>
-          <p>All publish/payment enforcement is on-chain. No trusted backend required.</p>
+          <p>Adjust the look of your Studio and manage your connected wallet.</p>
           <label className="field">
             Accent color
             <input
@@ -785,13 +785,17 @@ export default function StudioApp() {
 
       {screen === "publish" && (
         <section className="panel card-glow">
-          <h2>Publish On-Chain</h2>
+          <div className="brand-kicker">
+            <Image src="/brand/skr-logo.jpg" alt=".skr Studio" width={42} height={42} />
+            <span>Ready for your .skr</span>
+          </div>
+          <h2>Publish Your Page</h2>
           <p>
             {selectedTemplate.premium
               ? selectedTemplateOwned
-                ? `Premium template owned. This publish charges ${TEMPLATE_CHANGE_FEE_SOL} SOL plus network fees.`
-                : `Premium template not owned yet. Purchase requires ${SKR_UNLOCK_AMOUNT_UI} SKR.`
-              : "Free template. Publish updates your domain records without unlock charge."}
+                ? `This update is ready. You will approve a small ${TEMPLATE_CHANGE_FEE_SOL} SOL update fee plus network fees.`
+                : `Buy this template first for ${SKR_UNLOCK_AMOUNT_UI} SKR.`
+              : "This free template is ready to publish."}
           </p>
           <div className="wallet-box">
             <span>Template: {selectedTemplate.title}</span>
@@ -799,7 +803,7 @@ export default function StudioApp() {
             <span>Premium status: {selectedTemplateOwned ? "Unlocked" : "Locked"}</span>
           </div>
           <button className="btn btn-primary" onClick={handlePublish} disabled={isPublishing || (selectedTemplate.premium && !selectedTemplateOwned)}>
-            {isPublishing ? "Publishing..." : "Sign Atomic Transaction"}
+            {isPublishing ? "Publishing..." : "Review in Wallet"}
           </button>
           <button className="btn btn-ghost" onClick={() => goto("editor")}>Back to Editor</button>
         </section>
@@ -807,8 +811,12 @@ export default function StudioApp() {
 
       {screen === "preview" && (
         <section className="panel card-glow">
+          <div className="brand-kicker">
+            <Image src="/brand/skr-logo.jpg" alt=".skr Studio" width={42} height={42} />
+            <span>Published from .skr Studio</span>
+          </div>
           <h2>Publish Receipt</h2>
-          <p>Template rotation stays unlimited. Each rotation still needs a signed on-chain update tx.</p>
+          <p>Your latest publish details will appear here after your wallet confirms the update.</p>
           {publishResult ? (
             <div className="stack mono">
               <span>Signature: {publishResult.signature}</span>
@@ -820,7 +828,7 @@ export default function StudioApp() {
           )}
           <div className="row">
             <button className="btn btn-primary" onClick={() => nav("home")}>Go Home</button>
-            <button className="btn btn-ghost" onClick={() => nav("templates")}>Rotate Template</button>
+            <button className="btn btn-ghost" onClick={() => nav("templates")}>Choose Another Template</button>
           </div>
         </section>
       )}
@@ -862,7 +870,7 @@ function buildTemplateSections(input?: EditableTemplateContent): string[] {
   return [
     `<section><h2>${esc(input.heroTitle)}</h2><p>${esc(input.heroSubtitle)}</p></section>`,
     `<section><h3>Stats</h3><ul>${stats}</ul></section>`,
-    `<section><h3>Modules</h3><ul>${modules}</ul></section>`,
+    `<section><h3>Page sections</h3><ul>${modules}</ul></section>`,
     `<section><p><strong>CTA:</strong> ${esc(input.cta)}</p></section>`,
   ];
 }
@@ -925,7 +933,7 @@ function TemplateMockScreen({
       </div>
 
       <article className="panel">
-        <h3>Template Modules</h3>
+        <h3>What This Page Includes</h3>
         <div className="mock-module-list">
           {display.modules.map((m) => (
             <button key={m.title} className="mock-module" onClick={() => onAction(`${m.title} preview opened`)}>
@@ -951,11 +959,11 @@ function TemplateMockScreen({
       </article>
 
       <article className="panel card-glow">
-        <h3>{locked ? "Purchase Required" : "Ready To Launch"}</h3>
+        <h3>{locked ? "Unlock This Template" : "Ready To Launch"}</h3>
         <p>
           {locked
             ? `Buy this premium template (${SKR_UNLOCK_AMOUNT_UI} SKR) to unlock editing and publishing.`
-            : "This mock template is fully displayed and wired to editing and publish flow."}
+            : "This template is ready to edit, preview, and publish."}
         </p>
         <div className="row">
               {locked && template ? (

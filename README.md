@@ -41,6 +41,22 @@ ARWEAVE_JWK=<arweave_jwk_json>
   2. ANS `.skr` record writes using live mainnet `Create`/`Update` instruction shape.
 - Sign/send through wallet provider.
 
+## Public resolver demo surfaces
+
+- `https://skr.site` opens the Studio.
+- `https://<name>.skr.site` resolves a published `.skr` page through wildcard routing.
+- `https://skr.site/reverse` provides a wallet-to-.skr lookup page.
+- `https://skr.site/api/reverse?wallet=<wallet>` returns the reverse lookup as JSON.
+
+For production DNS, point `*.skr.site` to the deployed Next.js host and keep `skr.site` on the same deployment.
+
+Before the wildcard domain is ready, use Vercel's generated domain for testing:
+
+- Studio: `https://<project>.vercel.app`
+- Forward resolver: `https://<project>.vercel.app/resolve/<name>`
+- Reverse resolver: `https://<project>.vercel.app/reverse`
+- Reverse API: `https://<project>.vercel.app/api/reverse?wallet=<wallet>`
+
 ## Compliance note
 
 - See `docs/compliance.md` for the v1 storage/resolver trust model and upload compliance decision.
