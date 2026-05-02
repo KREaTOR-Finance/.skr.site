@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   applicationName: ".skr Studio",
   icons: {
     icon: "/icon.jpg",
-    apple: "/apple-icon.jpg",
   },
   openGraph: {
     title: ".skr Studio",
