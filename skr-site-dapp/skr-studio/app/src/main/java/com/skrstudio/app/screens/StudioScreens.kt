@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.skrstudio.app.CalendarDraft
+import com.skrstudio.app.CoachItem
 import com.skrstudio.app.DaoDraft
 import com.skrstudio.app.EventItem
 import com.skrstudio.app.HealthDraft
@@ -62,7 +63,9 @@ import com.skrstudio.app.PersonalBioDraft
 import com.skrstudio.app.PortfolioDraft
 import com.skrstudio.app.ProductItem
 import com.skrstudio.app.ProposalItem
+import com.skrstudio.app.R
 import com.skrstudio.app.ShopStoreDraft
+import com.skrstudio.app.SessionItem
 import com.skrstudio.app.SkrTemplate
 import com.skrstudio.app.SocialHubDraft
 import com.skrstudio.app.SupporterItem
@@ -76,7 +79,7 @@ import com.skrstudio.app.ui.SeekerColors
 import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(onStart: () -> Unit, onAbout: () -> Unit) {
+fun SplashScreen(onStart: () -> Unit, onFind: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -92,11 +95,11 @@ fun SplashScreen(onStart: () -> Unit, onAbout: () -> Unit) {
         ) {
             HeroBird()
             Text(".skr Studio", color = SeekerColors.TextPrimary, fontSize = 36.sp, fontWeight = FontWeight.Black)
-            Text("Your .skr, your way", color = SeekerColors.TextMuted)
+            Text("Your Solana identity, beautifully packaged for Seeker.", color = SeekerColors.TextMuted)
             Spacer(Modifier.height(6.dp))
-            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Get Started") }
-            OutlinedButton(onClick = onAbout, modifier = Modifier.fillMaxWidth()) { Text("What is .skr Studio?") }
-            Text("Powered by Solana • alldomains.id", color = SeekerColors.TextMuted, fontSize = 11.sp)
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start building") }
+            OutlinedButton(onClick = onFind, modifier = Modifier.fillMaxWidth()) { Text("Find a .skr") }
+            Text("Seeker-ready. Wallet-approved. Built on Solana.", color = SeekerColors.TextMuted, fontSize = 11.sp)
         }
     }
 }
@@ -108,9 +111,9 @@ fun ArtScreen(onBack: () -> Unit, onBuild: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         TopBar("About .skr Studio", onBack)
-        HeroCard("Official Seeker dApp", "Build a profile page linked to your .skr identity.")
+        HeroCard("Seeker-ready Studio", "Build a profile page linked to your .skr identity.")
         InfoRow("8 Ready Templates", "Social, shop, calendar, fitness, portfolio, DAO, and link-in-bio.")
-        InfoRow("On-Chain Publish", "Each publish is signed and confirmed on Solana.")
+        InfoRow("Solana Publish", "Your page is saved through wallet approval on Solana.")
         InfoRow("Made for Seeker", "Mobile-first flow with wallet approval.")
         Button(onClick = onBuild, modifier = Modifier.fillMaxWidth()) { Text("Let's build mine") }
     }
@@ -299,7 +302,7 @@ fun PublishScreen(template: SkrTemplate, walletAddress: String?, entitlementPurc
                 validationErrors.forEach { Text("• $it", color = Color(0xFFFF8A80), fontSize = 12.sp) }
             }
         }
-        InfoRow("Current step", publishStatus(flowState.step))
+        InfoRow("Status", publishStatus(flowState.step))
         if (!flowState.error.isNullOrBlank()) Text(publishError(flowState.error), color = Color(0xFFFF8A80), fontSize = 12.sp)
 
         Button(onClick = onPublish, enabled = flowState.canTapAction && validationErrors.isEmpty(), modifier = Modifier.fillMaxWidth()) { Text(publishCta(flowState.step)) }
@@ -309,15 +312,15 @@ fun PublishScreen(template: SkrTemplate, walletAddress: String?, entitlementPurc
 @Composable
 fun PreviewScreen(publishResult: PublishResult?, onHome: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(SeekerColors.BgDark).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Publish Receipt", color = SeekerColors.TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Your page is ready", color = SeekerColors.TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         if (publishResult == null) {
-            Text("No publish yet.", color = SeekerColors.TextMuted)
+            Text("Your published page will appear here after wallet approval.", color = SeekerColors.TextMuted)
         } else {
             InfoRow("Confirmation", publishResult.signature)
-            InfoRow("Page version", publishResult.contentHashHex)
-            InfoRow("Page link", publishResult.contentUri)
+            InfoRow("Page proof", publishResult.contentHashHex)
+            InfoRow("Public page", publishResult.contentUri)
         }
-        Button(onClick = onHome) { Text("Back Home") }
+        Button(onClick = onHome) { Text("Back home") }
     }
 }
 
@@ -395,6 +398,9 @@ private fun SocialHubModules(draft: SocialHubDraft) {
             Text("Web3", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             LinkList(draft.web3Links)
         }
+        Text("Creator", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        LinkList(draft.creatorLinks)
+        InfoRow("Featured action", draft.featuredCta)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             draft.stats.forEach { StatCard(it.value, it.label, Modifier.weight(1f)) }
         }
@@ -419,6 +425,7 @@ private fun ShopModules(draft: ShopStoreDraft) {
 
     Box {
         BasicCard("Shop / Store", "Filters, cart flow, buy now, and timed drop") {
+            InfoRow("Featured drop", "${draft.featuredDrop.name} - ${draft.featuredDrop.price}")
             Text("Drop ends in ${formatHms(countdown)}", color = SeekerColors.TextMuted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("all", "nft", "digital", "merch").forEach {
@@ -489,7 +496,7 @@ private fun CalendarModules(draft: CalendarDraft) {
     val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
     var monthIndex by remember { mutableIntStateOf(5) }
     var selectedSlot by remember { mutableStateOf(draft.bookingSlots.firstOrNull().orEmpty()) }
-    var selectedSession by remember { mutableStateOf("Strategy Session") }
+    var selectedSession by remember { mutableStateOf(draft.sessions.firstOrNull()?.name ?: "Strategy Session") }
     var livestreamCountdown by remember { mutableIntStateOf(4 * 3600 + 23 * 60 + 45) }
     var showRsvpSheet by remember { mutableStateOf(false) }
     var showTicketSheet by remember { mutableStateOf(false) }
@@ -511,7 +518,7 @@ private fun CalendarModules(draft: CalendarDraft) {
                 TextButton(onClick = { monthIndex = (monthIndex + 1) % 12 }) { Text("Next") }
             }
 
-            Text("Next livestream in ${formatHms(livestreamCountdown)}", color = SeekerColors.TextMuted, fontSize = 12.sp)
+            Text("${draft.livestreamTitle} in ${formatHms(livestreamCountdown)}", color = SeekerColors.TextMuted, fontSize = 12.sp)
 
             draft.events.forEach { event ->
                 Card(colors = CardDefaults.cardColors(SeekerColors.BgCard), border = BorderStroke(1.dp, SeekerColors.Border)) {
@@ -533,8 +540,9 @@ private fun CalendarModules(draft: CalendarDraft) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Strategy Session", "Code Review", "Creator Mentoring").forEach { session ->
-                    FilterChip(selected = selectedSession == session, onClick = { selectedSession = session }, label = { Text(session) })
+                draft.sessions.forEach { session ->
+                    val label = "${session.name} - ${session.price}"
+                    FilterChip(selected = selectedSession == session.name, onClick = { selectedSession = session.name }, label = { Text(label) })
                 }
             }
             Button(onClick = { showBookingSheet = true }, modifier = Modifier.fillMaxWidth()) { Text("Confirm booking") }
@@ -598,8 +606,8 @@ private fun HealthModules(draft: HealthDraft) {
 
             Text("Coaching", color = SeekerColors.ChromeLight, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Coach Nova", "Coach Astra", "Coach Vale").forEach { coach ->
-                    OutlinedButton(onClick = { selectedCoach = coach; showCoachSheet = true }) { Text(coach) }
+                draft.coaches.forEach { coach ->
+                    OutlinedButton(onClick = { selectedCoach = "${coach.name} - ${coach.price}"; showCoachSheet = true }) { Text(coach.name) }
                 }
             }
         }
@@ -625,6 +633,7 @@ private fun PortfolioModules(draft: PortfolioDraft) {
             draft.projects.forEach { InfoRow(it.label, it.url) }
             Text("Press", color = SeekerColors.ChromeLight, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             draft.press.forEach { InfoRow(it.label, it.url) }
+            InfoRow("Contact", draft.contactCta)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { showContactSheet = true }, modifier = Modifier.weight(1f)) { Text("Contact") }
                 OutlinedButton(onClick = { showWorkSheet = true }, modifier = Modifier.weight(1f)) { Text("View all") }
@@ -697,8 +706,8 @@ private fun DaoModules(draft: DaoDraft) {
         if (showDelegateSheet) {
             OverlaySheet("Delegate Votes", onClose = { showDelegateSheet = false }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Astra", "Nova", "Vale").forEach { person ->
-                        FilterChip(selected = delegateChoice == person, onClick = { delegateChoice = person }, label = { Text(person) })
+                    draft.delegates.forEach { person ->
+                        FilterChip(selected = delegateChoice == person.label, onClick = { delegateChoice = person.label }, label = { Text(person.label) })
                     }
                 }
                 Button(onClick = { showDelegateSheet = false }, modifier = Modifier.fillMaxWidth()) { Text("Confirm delegate") }
@@ -744,7 +753,7 @@ private fun LinkBioModules(draft: LinkBioDraft) {
 
             Text("Support", color = SeekerColors.ChromeLight, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("0.1 SOL", "0.5 SOL", "1 SOL", "Custom").forEach {
+                draft.tipAmounts.forEach {
                     FilterChip(selected = tipSelection == it, onClick = { tipSelection = it }, label = { Text(it) })
                 }
             }
@@ -776,9 +785,9 @@ private fun LinkBioModules(draft: LinkBioDraft) {
                 }
             }
 
+            val metrics = if (range == "7d") draft.analytics else listOf(MetricItem("Views", views.toString()), MetricItem("Clicks", clicks.toString()))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatCard(views.toString(), "Views", Modifier.weight(1f))
-                StatCard(clicks.toString(), "Clicks", Modifier.weight(1f))
+                metrics.forEach { StatCard(it.value, it.label, Modifier.weight(1f)) }
             }
 
             Text("Recent supporters", color = SeekerColors.ChromeLight, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
@@ -812,7 +821,7 @@ private fun LinkBioModules(draft: LinkBioDraft) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StyleControls(draft: TemplateDraft, onDraftChange: (TemplateDraft) -> Unit) = BasicCard("Style Controls", "Set accent, font, and profile icon") {
+private fun StyleControls(draft: TemplateDraft, onDraftChange: (TemplateDraft) -> Unit) = BasicCard("Style", "Set accent, font, and profile mark") {
     val accentChoices = listOf("#00C9A7", "#9945FF", "#FF4FCB", "#FF9432", "#4F9FFF")
     Text("Accent color", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -828,10 +837,10 @@ private fun StyleControls(draft: TemplateDraft, onDraftChange: (TemplateDraft) -
         }
     }
 
-    Text("Profile icon", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    Text("Profile mark", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        listOf("🐦", "🎨", "⚡", "🔮", "🌐").forEach { icon ->
-            FilterChip(selected = draft.profileEmoji == icon, onClick = { onDraftChange(updateStyle(draft, profileEmoji = icon)) }, label = { Text(icon) })
+        listOf("SKR", "R", "S", "C", "F").forEach { mark ->
+            FilterChip(selected = draft.profileMark == mark, onClick = { onDraftChange(updateStyle(draft, profileMark = mark)) }, label = { Text(mark) })
         }
     }
 }
@@ -850,20 +859,32 @@ private fun InputTables(draft: TemplateDraft, onDraftChange: (TemplateDraft) -> 
             EditableLinks(draft.socialLinks) { onDraftChange(draft.copy(socialLinks = it)) }
             Text("Web3 links", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             EditableLinks(draft.web3Links) { onDraftChange(draft.copy(web3Links = it)) }
+            Text("Creator links", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            EditableLinks(draft.creatorLinks) { onDraftChange(draft.copy(creatorLinks = it)) }
+            OutlinedTextField(value = draft.featuredCta, onValueChange = { onDraftChange(draft.copy(featuredCta = it)) }, label = { Text("Featured action") }, modifier = Modifier.fillMaxWidth())
+            EditableMetrics(draft.stats) { onDraftChange(draft.copy(stats = it)) }
         }
         is ShopStoreDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
+            Text("Featured drop", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            EditableProducts(listOf(draft.featuredDrop)) { updated -> updated.firstOrNull()?.let { onDraftChange(draft.copy(featuredDrop = it)) } }
+            OutlinedTextField(value = draft.dropEndsIn, onValueChange = { onDraftChange(draft.copy(dropEndsIn = it)) }, label = { Text("Drop timer") }, modifier = Modifier.fillMaxWidth())
             EditableProducts(draft.products) { onDraftChange(draft.copy(products = it)) }
+            EditableMetrics(draft.stats) { onDraftChange(draft.copy(stats = it)) }
         }
         is CalendarDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
+            OutlinedTextField(value = draft.livestreamTitle, onValueChange = { onDraftChange(draft.copy(livestreamTitle = it)) }, label = { Text("Livestream title") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = draft.livestreamStartsIn, onValueChange = { onDraftChange(draft.copy(livestreamStartsIn = it)) }, label = { Text("Livestream timer") }, modifier = Modifier.fillMaxWidth())
             EditableEvents(draft.events) { onDraftChange(draft.copy(events = it)) }
             EditableSlots(draft.bookingSlots) { onDraftChange(draft.copy(bookingSlots = it)) }
+            EditableSessions(draft.sessions) { onDraftChange(draft.copy(sessions = it)) }
         }
         is HealthDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
             EditableWorkouts(draft.workouts) { onDraftChange(draft.copy(workouts = it)) }
             EditableMetrics(draft.metrics) { onDraftChange(draft.copy(metrics = it)) }
+            EditableCoaches(draft.coaches) { onDraftChange(draft.copy(coaches = it)) }
         }
         is PortfolioDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
@@ -871,15 +892,20 @@ private fun InputTables(draft: TemplateDraft, onDraftChange: (TemplateDraft) -> 
             EditableLinks(draft.projects) { onDraftChange(draft.copy(projects = it)) }
             Text("Press", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             EditableLinks(draft.press) { onDraftChange(draft.copy(press = it)) }
+            OutlinedTextField(value = draft.contactCta, onValueChange = { onDraftChange(draft.copy(contactCta = it)) }, label = { Text("Contact action") }, modifier = Modifier.fillMaxWidth())
         }
         is DaoDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
             OutlinedTextField(value = draft.treasury, onValueChange = { onDraftChange(draft.copy(treasury = it)) }, label = { Text("Treasury") }, modifier = Modifier.fillMaxWidth())
             EditableProposals(draft.proposals) { onDraftChange(draft.copy(proposals = it)) }
+            Text("Delegates", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            EditableLinks(draft.delegates) { onDraftChange(draft.copy(delegates = it)) }
         }
         is LinkBioDraft -> {
             CommonFields(draft.headline, draft.subtext) { h, s -> onDraftChange(draft.copy(headline = h, subtext = s)) }
             EditableLinks(draft.links) { onDraftChange(draft.copy(links = it)) }
+            EditableSlots(draft.tipAmounts) { onDraftChange(draft.copy(tipAmounts = it)) }
+            EditableMetrics(draft.analytics) { onDraftChange(draft.copy(analytics = it)) }
             EditableSupporters(draft.supporters) { onDraftChange(draft.copy(supporters = it)) }
         }
     }
@@ -907,7 +933,14 @@ private fun HeroBird() {
             .background(Brush.linearGradient(listOf(SeekerColors.TealCyan.copy(alpha = 0.25f), SeekerColors.Chrome.copy(alpha = 0.22f))))
             .border(1.dp, SeekerColors.Border, RoundedCornerShape(26.dp)),
         contentAlignment = Alignment.Center,
-    ) { Text("??", fontSize = 44.sp) }
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_seeker_logo),
+            contentDescription = ".skr Studio mark",
+            modifier = Modifier.size(104.dp).clip(RoundedCornerShape(24.dp)),
+            contentScale = ContentScale.Crop,
+        )
+    }
 }
 
 @Composable
@@ -915,7 +948,12 @@ private fun HeroCard(title: String, subtitle: String) {
     Card(colors = CardDefaults.cardColors(SeekerColors.BgCard), border = BorderStroke(1.dp, SeekerColors.Border), shape = RoundedCornerShape(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(SeekerColors.TealCyan.copy(alpha = 0.25f), SeekerColors.Chrome.copy(alpha = 0.2f)))), contentAlignment = Alignment.Center) {
-                Text("??", fontSize = 24.sp)
+                Image(
+                    painter = painterResource(R.drawable.ic_seeker_logo),
+                    contentDescription = ".skr Studio mark",
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                )
             }
             Column {
                 Text(title, color = SeekerColors.TextPrimary, fontWeight = FontWeight.Bold)
@@ -959,7 +997,7 @@ private fun HeaderCard(template: SkrTemplate, draft: TemplateDraft) = BasicCard(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Image(painter = painterResource(template.imageRes), contentDescription = template.title, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
         Column {
-            Text(draft.profileEmoji, fontSize = 18.sp)
+            Text(draft.profileMark, color = SeekerColors.TealCyan, fontSize = 18.sp, fontWeight = FontWeight.Black)
             Text(
                 draft.headline,
                 color = SeekerColors.TextPrimary,
@@ -1091,6 +1129,46 @@ private fun EditableWorkouts(items: List<WorkoutItem>, onChange: (List<WorkoutIt
 }
 
 @Composable
+private fun EditableCoaches(items: List<CoachItem>, onChange: (List<CoachItem>) -> Unit) {
+    Text("Coaches", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    items.forEachIndexed { i, item ->
+        Card(colors = CardDefaults.cardColors(SeekerColors.BgCard), border = BorderStroke(1.dp, SeekerColors.Border), shape = RoundedCornerShape(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = item.name, onValueChange = { v -> onChange(items.updated(i, item.copy(name = v))) }, label = { Text("Coach") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = item.session, onValueChange = { v -> onChange(items.updated(i, item.copy(session = v))) }, label = { Text("Session") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = item.price, onValueChange = { v -> onChange(items.updated(i, item.copy(price = v))) }, label = { Text("Price") }, modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onChange(items.moveUp(i)) }, enabled = i > 0, modifier = Modifier.weight(1f)) { Text("Up") }
+                    OutlinedButton(onClick = { onChange(items.moveDown(i)) }, enabled = i < items.lastIndex, modifier = Modifier.weight(1f)) { Text("Down") }
+                    OutlinedButton(onClick = { onChange(items.removeAtSafe(i)) }, modifier = Modifier.weight(1f)) { Text("Delete") }
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = { onChange(items + CoachItem("", "", "")) }, modifier = Modifier.fillMaxWidth()) { Text("Add coach") }
+}
+
+@Composable
+private fun EditableSessions(items: List<SessionItem>, onChange: (List<SessionItem>) -> Unit) {
+    Text("Session types", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    items.forEachIndexed { i, item ->
+        Card(colors = CardDefaults.cardColors(SeekerColors.BgCard), border = BorderStroke(1.dp, SeekerColors.Border), shape = RoundedCornerShape(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = item.name, onValueChange = { v -> onChange(items.updated(i, item.copy(name = v))) }, label = { Text("Session") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = item.price, onValueChange = { v -> onChange(items.updated(i, item.copy(price = v))) }, label = { Text("Price") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = item.duration, onValueChange = { v -> onChange(items.updated(i, item.copy(duration = v))) }, label = { Text("Duration") }, modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onChange(items.moveUp(i)) }, enabled = i > 0, modifier = Modifier.weight(1f)) { Text("Up") }
+                    OutlinedButton(onClick = { onChange(items.moveDown(i)) }, enabled = i < items.lastIndex, modifier = Modifier.weight(1f)) { Text("Down") }
+                    OutlinedButton(onClick = { onChange(items.removeAtSafe(i)) }, modifier = Modifier.weight(1f)) { Text("Delete") }
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = { onChange(items + SessionItem("", "", "")) }, modifier = Modifier.fillMaxWidth()) { Text("Add session") }
+}
+
+@Composable
 private fun EditableMetrics(items: List<MetricItem>, onChange: (List<MetricItem>) -> Unit) {
     Text("Metrics", color = SeekerColors.ChromeLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     items.forEachIndexed { i, item ->
@@ -1134,15 +1212,15 @@ private fun EditableSupporters(items: List<SupporterItem>, onChange: (List<Suppo
     OutlinedButton(onClick = { onChange(items + SupporterItem("", "")) }, modifier = Modifier.fillMaxWidth()) { Text("Add supporter") }
 }
 
-private fun updateStyle(draft: TemplateDraft, themeAccent: String? = null, fontStyle: String? = null, profileEmoji: String? = null): TemplateDraft = when (draft) {
-    is PersonalBioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is SocialHubDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is ShopStoreDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is CalendarDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is HealthDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is PortfolioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is DaoDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
-    is LinkBioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileEmoji = profileEmoji ?: draft.profileEmoji)
+private fun updateStyle(draft: TemplateDraft, themeAccent: String? = null, fontStyle: String? = null, profileMark: String? = null): TemplateDraft = when (draft) {
+    is PersonalBioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is SocialHubDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is ShopStoreDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is CalendarDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is HealthDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is PortfolioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is DaoDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
+    is LinkBioDraft -> draft.copy(themeAccent = themeAccent ?: draft.themeAccent, fontStyle = fontStyle ?: draft.fontStyle, profileMark = profileMark ?: draft.profileMark)
 }
 
 private fun draftAccent(draft: TemplateDraft, templateId: String): Color {
@@ -1170,10 +1248,10 @@ private fun publishStatus(step: PublishStep): String = when (step) {
     PublishStep.CHECKING_ENTITLEMENT -> "Checking access"
     PublishStep.UPLOADING -> "Saving page"
     PublishStep.AWAITING_PURCHASE_SIGNATURE -> "Waiting for purchase approval"
-    PublishStep.PURCHASE_SUBMITTED -> "Purchase sent"
+    PublishStep.PURCHASE_SUBMITTED -> "Purchase submitted"
     PublishStep.PURCHASE_CONFIRMED -> "Purchase complete"
     PublishStep.AWAITING_PUBLISH_SIGNATURE -> "Waiting for publish approval"
-    PublishStep.PUBLISH_SUBMITTED -> "Publish sent"
+    PublishStep.PUBLISH_SUBMITTED -> "Page submitted"
     PublishStep.PUBLISH_CONFIRMED -> "Done"
     PublishStep.FAILED -> "Needs attention"
 }

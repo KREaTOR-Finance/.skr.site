@@ -15,7 +15,7 @@ skr.site gives every `.skr` owner a Seeker-styled Studio to choose a template, p
 ## What Works Today
 
 - Forward resolver: `name.skr.site` resolves a `.skr` name to its published page or a friendly default page.
-- Reverse resolver: `/reverse` and `/api/reverse?wallet=` find the `.skr` identity connected to a Solana wallet.
+- Find by wallet: `/reverse` and `/api/reverse?wallet=` find the `.skr` identity connected to a Solana wallet.
 - Studio: users can connect a wallet, unlock premium templates, edit template content, upload HTML, and publish records.
 - Storage: published HTML uploads through the gateway to Arweave or IPFS.
 - Mobile proof: signed Android APK is available for Seeker device testing.
@@ -32,7 +32,7 @@ skr.site gives every `.skr` owner a Seeker-styled Studio to choose a template, p
 
 - Live app: `https://skr.site`
 - Demo forward page: `https://<demo>.skr.site`
-- Reverse resolver: `https://skr.site/reverse`
+- Find by wallet: `https://skr.site/reverse`
 - APK release: `v1.0.1` or newer release asset
 
 ## Vercel Test Links
@@ -41,7 +41,7 @@ Use these while testing on the generated Vercel domain:
 
 - Studio: `https://<project>.vercel.app`
 - Forward resolver: `https://<project>.vercel.app/resolve/<demo>`
-- Reverse resolver: `https://<project>.vercel.app/reverse`
+- Find by wallet: `https://<project>.vercel.app/reverse`
 - Reverse API: `https://<project>.vercel.app/api/reverse?wallet=<demo-wallet>`
 
 Wildcard behavior stays in the app for the real domain, but generic Vercel testing should use `/resolve/<demo>`.

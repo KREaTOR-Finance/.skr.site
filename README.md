@@ -14,11 +14,17 @@ npm run test
 
 ## Environment
 
-Set the deployed custom program ID:
+Set public chain values for the target network:
 
 ```bash
 NEXT_PUBLIC_SKR_PROGRAM_ID=<deployed_program_pubkey>
+NEXT_PUBLIC_SOLANA_CHAIN=mainnet
+NEXT_PUBLIC_SOLANA_RPC_URLS=https://api.mainnet-beta.solana.com
+NEXT_PUBLIC_SKR_MINT=<skr_mint_pubkey>
+NEXT_PUBLIC_SKR_TREASURY=<treasury_wallet_pubkey>
 ```
+
+For devnet testing, use devnet program, test mint, and treasury public keys only. Do not put wallet secrets in `.env`, Vercel, Android resources, or git.
 
 Storage uploader configuration:
 
@@ -35,11 +41,12 @@ ARWEAVE_JWK=<arweave_jwk_json>
 
 ## Current on-chain flow
 
-- Build publish payload (domain/template/hash/uri).
-- Build atomic transaction with:
-  1. `unlock_and_record_publish` custom program instruction.
-  2. ANS `.skr` record writes using live mainnet `Create`/`Update` instruction shape.
-- Sign/send through wallet provider.
+- Build a template-specific draft.
+- Premium templates check the matching template entitlement.
+- If needed, build and submit `purchase_template` for that template.
+- Upload sanitized page HTML through the gateway.
+- Build and submit `record_publish` with domain, template, content URI, and page proof.
+- Refresh chain state and render the receipt.
 
 ## Public resolver demo surfaces
 
@@ -54,7 +61,7 @@ Before the wildcard domain is ready, use Vercel's generated domain for testing:
 
 - Studio: `https://<project>.vercel.app`
 - Forward resolver: `https://<project>.vercel.app/resolve/<name>`
-- Reverse resolver: `https://<project>.vercel.app/reverse`
+- Find by wallet: `https://<project>.vercel.app/reverse`
 - Reverse API: `https://<project>.vercel.app/api/reverse?wallet=<wallet>`
 
 ## Compliance note

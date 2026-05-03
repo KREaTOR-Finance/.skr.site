@@ -42,7 +42,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
       <div className="ambient ambient-b" />
       <section className="panel card-glow resolver-card">
         <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
-        <span className="chip">.skr resolver</span>
+        <span className="chip">Find a .skr page</span>
         <h1>{title}</h1>
         <p>{result.message ?? "This name is ready for a beautiful Seeker-native public page."}</p>
         <div className="wallet-box">

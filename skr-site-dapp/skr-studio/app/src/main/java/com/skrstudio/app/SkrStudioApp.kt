@@ -1,5 +1,7 @@
 package com.skrstudio.app
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,7 +96,9 @@ fun SkrStudioApp(
                 composable("splash") {
                     SplashScreen(
                         onStart = { navController.navigate("home") },
-                        onAbout = { navController.navigate("art") },
+                        onFind = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://skr.site/reverse")))
+                        },
                     )
                 }
                 composable("art") {

@@ -173,6 +173,43 @@ section,
   text-align: center;
 }
 
+.welcome-splash {
+  min-height: calc(100dvh - 28px);
+  padding: 24px 4px 34px;
+}
+
+.welcome-logo-wrap {
+  position: relative;
+  width: 230px;
+  height: 230px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 2px;
+}
+
+.welcome-logo-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 201, 167, 0.22), transparent 66%);
+  filter: blur(18px);
+}
+
+.welcome-kicker {
+  color: var(--chrome-light);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.welcome-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 .hero-logo {
   border-radius: 50%;
   margin: 0 auto 10px;
@@ -256,6 +293,21 @@ section,
   display: grid;
   gap: 6px;
   padding: 10px 12px 12px;
+}
+
+.template-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-radius: 8px;
+  color: #020202;
+  background: linear-gradient(135deg, var(--teal), var(--chrome-light));
+  box-shadow: 0 0 14px rgba(0, 201, 167, 0.22);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
 }
 
 .template-meta span,

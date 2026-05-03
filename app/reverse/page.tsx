@@ -17,9 +17,9 @@ export default async function ReversePage({
 
       <section className="panel card-glow resolver-card">
         <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={78} height={78} className="hero-logo brand-logo" />
-        <span className="chip">Reverse resolver</span>
-        <h1>Find the .skr behind a wallet</h1>
-        <p>Paste a Solana wallet address and we will look for its primary .skr name.</p>
+        <span className="chip">Find by wallet</span>
+        <h1>Find a .skr by wallet</h1>
+        <p>Paste a Solana wallet address to find its .skr name and open the public page.</p>
 
         <form className="reverse-form" action="/reverse">
           <label className="field">

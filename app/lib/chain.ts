@@ -23,8 +23,9 @@ import type { PublishPayload, WalletSession } from "./types";
 const ANS_PROGRAM = new PublicKey(ANS_PROGRAM_ID);
 const ANS_CREATE_DISCRIMINATOR = Buffer.from(ANS_CREATE_DISCRIMINATOR_HEX, "hex");
 const ANS_UPDATE_DISCRIMINATOR = Buffer.from(ANS_UPDATE_DISCRIMINATOR_HEX, "hex");
-const UNLOCK_ONLY_DISCRIMINATOR = Buffer.from("1db4180948954191", "hex");
-const UNLOCK_AND_PUBLISH_DISCRIMINATOR = Buffer.from("b9ec9a933f41c47e", "hex");
+const PURCHASE_TEMPLATE_DISCRIMINATOR = Buffer.from("d36cb785719a1440", "hex");
+const RECORD_PUBLISH_DISCRIMINATOR = Buffer.from("c2261e78db6bdd7b", "hex");
+const TEMPLATE_ENTITLEMENT_DISCRIMINATOR = Buffer.from("e0c994ff2b5ab407", "hex");
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 const DEFAULT_RPC_FALLBACKS = [DEFAULT_RPC_URL];
 const TOKEN_ACCOUNT_AMOUNT_OFFSET = 64;
@@ -35,9 +36,9 @@ const SKR_PROGRAM_ERROR_BY_CODE: Record<number, string> = {
   6002: "Domain is too long",
   6003: "Template id is too long",
   6004: "Content URI is too long",
-  6005: "Template premium policy mismatch",
-  6006: "Unlock-only requires a premium template",
-  6007: "Free users cannot rotate templates before unlocking premium",
+  6005: "This template does not require a purchase",
+  6006: "Template access is missing or invalid",
+  6007: "This template has not been purchased for this wallet",
 };
 
 function writeU64LE(buffer: Buffer, offset: number, value: number): void {
@@ -65,6 +66,23 @@ function readProgramId(): PublicKey {
   } catch {
     throw new Error("Invalid NEXT_PUBLIC_SKR_PROGRAM_ID");
   }
+}
+
+function readPublicKeyEnv(name: string, fallback: string): PublicKey {
+  const value = process.env[name]?.trim() || fallback;
+  try {
+    return new PublicKey(value);
+  } catch {
+    throw new Error(`Invalid ${name}`);
+  }
+}
+
+function readSkrMint(): PublicKey {
+  return readPublicKeyEnv("NEXT_PUBLIC_SKR_MINT", SKR_MINT);
+}
+
+function readSkrTreasury(): PublicKey {
+  return readPublicKeyEnv("NEXT_PUBLIC_SKR_TREASURY", SKR_TREASURY);
 }
 
 function normalizeRpcUrlList(rpcInput?: string | string[]): string[] {
@@ -147,20 +165,20 @@ function parseProgramErrorCode(message: string): number | null {
 }
 
 export function toUserFacingChainError(error: unknown): string {
-  const message = String((error as { message?: string })?.message ?? error ?? "Unknown transaction error");
+  const message = String((error as { message?: string })?.message ?? error ?? "Unknown wallet error");
   const lower = message.toLowerCase();
 
   if (lower.includes("user rejected") || lower.includes("rejected the request") || lower.includes("denied")) {
-    return "Transaction was cancelled in wallet";
+    return "Wallet approval was cancelled";
   }
   if (lower.includes("insufficient funds for fee")) {
-    return "Insufficient SOL for network fees";
+    return "Not enough SOL for network fees";
   }
   if (lower.includes("tokenaccountnotfounderror") || lower.includes("could not find account")) {
-    return "SKR token account not found for connected wallet";
+    return "We could not find SKR in this wallet";
   }
   if (lower.includes("blockhash not found")) {
-    return "Network blockhash expired. Please retry";
+    return "Network confirmation expired. Please try again";
   }
 
   const programCode = parseProgramErrorCode(message);
@@ -169,11 +187,19 @@ export function toUserFacingChainError(error: unknown): string {
   }
 
   const firstLine = message.split("\n")[0]?.trim();
-  return firstLine ? `Transaction failed: ${firstLine}` : "Transaction failed";
+  return firstLine ? `We could not finish that approval: ${firstLine}` : "We could not finish that approval";
 }
 
-export function deriveUnlockPda(wallet: PublicKey, programId = readProgramId()): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync([Buffer.from("unlock"), wallet.toBuffer()], programId);
+export function deriveTemplateEntitlementPda(wallet: PublicKey, templateId: string, programId = readProgramId()): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("entitlement"), wallet.toBuffer(), Buffer.from(templateId, "utf8")],
+    programId,
+  );
+  return pda;
+}
+
+export function derivePublisherPda(wallet: PublicKey, programId = readProgramId()): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync([Buffer.from("publisher"), wallet.toBuffer()], programId);
   return pda;
 }
 
@@ -183,7 +209,7 @@ export function deriveReceiptPda(wallet: PublicKey, contentHashHex: string, prog
   return pda;
 }
 
-function encodeUnlockAndPublishData(payload: PublishPayload): Buffer {
+function encodeRecordPublishData(payload: PublishPayload): Buffer {
   const domain = writeBorshString(payload.domain);
   const templateId = writeBorshString(payload.templateId);
   const uri = writeBorshString(payload.contentUri);
@@ -191,23 +217,22 @@ function encodeUnlockAndPublishData(payload: PublishPayload): Buffer {
   if (hash.length !== 32) throw new Error("contentHash must be 32-byte hex");
 
   const out = Buffer.alloc(
-    UNLOCK_AND_PUBLISH_DISCRIMINATOR.length + domain.length + templateId.length + 32 + uri.length + 1,
+    RECORD_PUBLISH_DISCRIMINATOR.length + domain.length + templateId.length + 32 + uri.length,
   );
   let off = 0;
-  UNLOCK_AND_PUBLISH_DISCRIMINATOR.copy(out, off); off += UNLOCK_AND_PUBLISH_DISCRIMINATOR.length;
+  RECORD_PUBLISH_DISCRIMINATOR.copy(out, off); off += RECORD_PUBLISH_DISCRIMINATOR.length;
   domain.copy(out, off); off += domain.length;
   templateId.copy(out, off); off += templateId.length;
   hash.copy(out, off); off += 32;
-  uri.copy(out, off); off += uri.length;
-  out.writeUInt8(payload.isPremium ? 1 : 0, off);
+  uri.copy(out, off);
   return out;
 }
 
-function encodeUnlockOnlyData(templateId: string): Buffer {
+function encodePurchaseTemplateData(templateId: string): Buffer {
   const template = writeBorshString(templateId);
-  const out = Buffer.alloc(UNLOCK_ONLY_DISCRIMINATOR.length + template.length);
-  UNLOCK_ONLY_DISCRIMINATOR.copy(out, 0);
-  template.copy(out, UNLOCK_ONLY_DISCRIMINATOR.length);
+  const out = Buffer.alloc(PURCHASE_TEMPLATE_DISCRIMINATOR.length + template.length);
+  PURCHASE_TEMPLATE_DISCRIMINATOR.copy(out, 0);
+  template.copy(out, PURCHASE_TEMPLATE_DISCRIMINATOR.length);
   return out;
 }
 
@@ -328,43 +353,40 @@ export async function createAnsRecordWriteInstructions(params: {
   return instructions;
 }
 
-export function createUnlockAndPublishIx(wallet: PublicKey, payload: PublishPayload, programId = readProgramId()): TransactionInstruction {
-  const mint = new PublicKey(SKR_MINT);
-  const treasuryOwner = new PublicKey(SKR_TREASURY);
-  const payerAta = getAssociatedTokenAddressSync(mint, wallet, false);
-  const treasuryAta = getAssociatedTokenAddressSync(mint, treasuryOwner, true);
-  const unlockPda = deriveUnlockPda(wallet, programId);
+export function createRecordPublishIx(wallet: PublicKey, payload: PublishPayload, programId = readProgramId()): TransactionInstruction {
+  const treasuryOwner = readSkrTreasury();
+  const publisherPda = derivePublisherPda(wallet, programId);
   const receiptPda = deriveReceiptPda(wallet, payload.contentHash, programId);
+  const keys = [
+    { pubkey: wallet, isSigner: true, isWritable: true },
+    { pubkey: publisherPda, isSigner: false, isWritable: true },
+    { pubkey: receiptPda, isSigner: false, isWritable: true },
+    ...(payload.isPremium
+      ? [{ pubkey: deriveTemplateEntitlementPda(wallet, payload.templateId, programId), isSigner: false, isWritable: false }]
+      : []),
+    { pubkey: treasuryOwner, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
 
   return new TransactionInstruction({
     programId,
-    keys: [
-      { pubkey: wallet, isSigner: true, isWritable: true },
-      { pubkey: unlockPda, isSigner: false, isWritable: true },
-      { pubkey: receiptPda, isSigner: false, isWritable: true },
-      { pubkey: mint, isSigner: false, isWritable: false },
-      { pubkey: payerAta, isSigner: false, isWritable: true },
-      { pubkey: treasuryAta, isSigner: false, isWritable: true },
-      { pubkey: treasuryOwner, isSigner: false, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data: encodeUnlockAndPublishData(payload),
+    keys,
+    data: encodeRecordPublishData(payload),
   });
 }
 
-export function createUnlockOnlyIx(wallet: PublicKey, templateId: string, programId = readProgramId()): TransactionInstruction {
-  const mint = new PublicKey(SKR_MINT);
-  const treasuryOwner = new PublicKey(SKR_TREASURY);
+export function createPurchaseTemplateIx(wallet: PublicKey, templateId: string, programId = readProgramId()): TransactionInstruction {
+  const mint = readSkrMint();
+  const treasuryOwner = readSkrTreasury();
   const payerAta = getAssociatedTokenAddressSync(mint, wallet, false);
   const treasuryAta = getAssociatedTokenAddressSync(mint, treasuryOwner, true);
-  const unlockPda = deriveUnlockPda(wallet, programId);
+  const entitlementPda = deriveTemplateEntitlementPda(wallet, templateId, programId);
 
   return new TransactionInstruction({
     programId,
     keys: [
       { pubkey: wallet, isSigner: true, isWritable: true },
-      { pubkey: unlockPda, isSigner: false, isWritable: true },
+      { pubkey: entitlementPda, isSigner: false, isWritable: true },
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: payerAta, isSigner: false, isWritable: true },
       { pubkey: treasuryAta, isSigner: false, isWritable: true },
@@ -372,7 +394,7 @@ export function createUnlockOnlyIx(wallet: PublicKey, templateId: string, progra
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
-    data: encodeUnlockOnlyData(templateId),
+    data: encodePurchaseTemplateData(templateId),
   });
 }
 
@@ -381,7 +403,7 @@ interface WalletSigner {
   signTransaction(tx: VersionedTransaction): Promise<VersionedTransaction>;
 }
 
-export async function signAndSendAtomicPublishTx(params: {
+export async function signAndSendPublishTx(params: {
   rpcUrl?: string;
   rpcUrls?: string[];
   wallet: WalletSigner;
@@ -389,7 +411,7 @@ export async function signAndSendAtomicPublishTx(params: {
 }) {
   return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
     const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    const unlockIx = createUnlockAndPublishIx(params.wallet.publicKey, params.payload);
+    const publishIx = createRecordPublishIx(params.wallet.publicKey, params.payload);
     const recordIxs = await createAnsRecordWriteInstructions({
       connection,
       owner: params.wallet.publicKey,
@@ -401,7 +423,7 @@ export async function signAndSendAtomicPublishTx(params: {
       recentBlockhash: blockhash,
       instructions: [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }),
-        unlockIx,
+        publishIx,
         ...recordIxs,
       ],
     }).compileToV0Message();
@@ -414,7 +436,7 @@ export async function signAndSendAtomicPublishTx(params: {
   });
 }
 
-export async function signAndSendUnlockTx(params: {
+export async function signAndSendPurchaseTx(params: {
   rpcUrl?: string;
   rpcUrls?: string[];
   wallet: WalletSigner;
@@ -422,14 +444,14 @@ export async function signAndSendUnlockTx(params: {
 }) {
   return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
     const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    const unlockIx = createUnlockOnlyIx(params.wallet.publicKey, params.templateId);
+    const purchaseIx = createPurchaseTemplateIx(params.wallet.publicKey, params.templateId);
 
     const message = new TransactionMessage({
       payerKey: params.wallet.publicKey,
       recentBlockhash: blockhash,
       instructions: [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
-        unlockIx,
+        purchaseIx,
       ],
     }).compileToV0Message();
 
@@ -445,16 +467,15 @@ export function isUnlockedByChain(wallet: WalletSession | null): boolean {
   return !!wallet?.unlocked;
 }
 
-export interface UnlockAccountState {
-  unlocked: boolean;
-  unlockedAt: number;
-  hasPublished: boolean;
-  lastTemplateId: string;
+export interface TemplateEntitlementState {
+  templateId: string;
+  purchased: boolean;
+  purchasedAt: number;
   initialized: boolean;
 }
 
-export interface UnlockPurchasePreflight {
-  unlockedOnChain: boolean;
+export interface TemplatePurchasePreflight {
+  purchasedOnChain: boolean;
   tokenAccountAddress: string;
   tokenAccountExists: boolean;
   rawBalance: string;
@@ -473,75 +494,76 @@ function readBorshString(data: Buffer, offset: number): { value: string; next: n
   };
 }
 
-function parseUnlockAccount(data: Buffer): UnlockAccountState {
-  // Anchor discriminator + struct fields:
-  // wallet[32], unlocked[u8], unlocked_at[i64], last_template_id[string], has_published[u8], bump[u8], initialized[u8]
+function parseTemplateEntitlementAccount(data: Buffer): TemplateEntitlementState {
+  if (!data.subarray(0, 8).equals(TEMPLATE_ENTITLEMENT_DISCRIMINATOR)) {
+    throw new Error("Template access account was not recognized");
+  }
   let off = 8; // discriminator
   off += 32; // wallet
-  const unlocked = data.readUInt8(off) === 1; off += 1;
-  const unlockedAt = Number(data.readBigInt64LE(off)); off += 8;
   const template = readBorshString(data, off);
   off = template.next;
-  const hasPublished = data.readUInt8(off) === 1; off += 1;
+  const purchased = data.readUInt8(off) === 1; off += 1;
+  const purchasedAt = Number(data.readBigInt64LE(off)); off += 8;
   off += 1; // bump
   const initialized = data.readUInt8(off) === 1;
   return {
-    unlocked,
-    unlockedAt,
-    hasPublished,
-    lastTemplateId: template.value,
+    templateId: template.value,
+    purchased,
+    purchasedAt,
     initialized,
   };
 }
 
-export async function fetchUnlockAccountState(params: {
+export async function fetchTemplateEntitlementState(params: {
   rpcUrl?: string;
   rpcUrls?: string[];
   wallet: PublicKey;
+  templateId: string;
   programId?: PublicKey;
-}): Promise<UnlockAccountState> {
+}): Promise<TemplateEntitlementState> {
   const programId = params.programId ?? readProgramId();
   return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
-    const unlockPda = deriveUnlockPda(params.wallet, programId);
-    const info = await connection.getAccountInfo(unlockPda, "confirmed");
+    const entitlementPda = deriveTemplateEntitlementPda(params.wallet, params.templateId, programId);
+    const info = await connection.getAccountInfo(entitlementPda, "confirmed");
     if (!info?.data) {
       return {
-        unlocked: false,
-        unlockedAt: 0,
-        hasPublished: false,
-        lastTemplateId: "",
+        templateId: params.templateId,
+        purchased: false,
+        purchasedAt: 0,
         initialized: false,
       };
     }
-    return parseUnlockAccount(Buffer.from(info.data));
+    return parseTemplateEntitlementAccount(Buffer.from(info.data));
   });
 }
 
-export async function preflightUnlockPurchase(params: {
+export async function preflightTemplatePurchase(params: {
   rpcUrl?: string;
   rpcUrls?: string[];
   wallet: PublicKey;
-}): Promise<UnlockPurchasePreflight> {
-  const mint = new PublicKey(SKR_MINT);
+  templateId: string;
+}): Promise<TemplatePurchasePreflight> {
+  const mint = readSkrMint();
   const requiredRaw = BigInt(SKR_UNLOCK_AMOUNT_RAW);
 
   return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
-    const unlockState = await fetchUnlockAccountState({
+    const entitlementState = await fetchTemplateEntitlementState({
       rpcUrls: [connection.rpcEndpoint],
       wallet: params.wallet,
+      templateId: params.templateId,
     });
 
     const tokenAccount = getAssociatedTokenAddressSync(mint, params.wallet, false);
     const ataInfo = await connection.getAccountInfo(tokenAccount, "confirmed");
     if (!ataInfo?.data) {
       return {
-        unlockedOnChain: unlockState.unlocked,
+        purchasedOnChain: entitlementState.purchased,
         tokenAccountAddress: tokenAccount.toBase58(),
         tokenAccountExists: false,
         rawBalance: "0",
         uiBalance: 0,
         requiredRaw: requiredRaw.toString(),
-        enoughBalance: unlockState.unlocked,
+        enoughBalance: entitlementState.purchased,
       };
     }
 
@@ -551,13 +573,13 @@ export async function preflightUnlockPurchase(params: {
     }
 
     return {
-      unlockedOnChain: unlockState.unlocked,
+      purchasedOnChain: entitlementState.purchased,
       tokenAccountAddress: tokenAccount.toBase58(),
       tokenAccountExists: true,
       rawBalance: rawBalance.toString(),
       uiBalance: Number(rawBalance) / 1_000_000,
       requiredRaw: requiredRaw.toString(),
-      enoughBalance: unlockState.unlocked || rawBalance >= requiredRaw,
+      enoughBalance: entitlementState.purchased || rawBalance >= requiredRaw,
     };
   });
 }

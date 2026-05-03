@@ -40,7 +40,7 @@ class MobileWalletSessionManager(activity: ComponentActivity) {
                 Result.success(session)
             }
 
-            is TransactionResult.NoWalletFound -> Result.failure(IllegalStateException("No MWA wallet found"))
+            is TransactionResult.NoWalletFound -> Result.failure(IllegalStateException("No Solana wallet was found"))
             is TransactionResult.Failure -> Result.failure(result.e)
         }
     }
@@ -63,7 +63,7 @@ class MobileWalletSessionManager(activity: ComponentActivity) {
             is TransactionResult.Success -> {
                 val payload = result.payload
                 val signature = payload.signatures.firstOrNull()
-                    ?: return Result.failure(IllegalStateException("Wallet returned no signature"))
+                    ?: return Result.failure(IllegalStateException("Wallet approval did not complete"))
                 Result.success(
                     SignedTransactionResult(
                         signatureBase58 = ChainCodec.encodeBase58(signature),
@@ -72,7 +72,7 @@ class MobileWalletSessionManager(activity: ComponentActivity) {
                 )
             }
 
-            is TransactionResult.NoWalletFound -> Result.failure(IllegalStateException("No MWA wallet found"))
+            is TransactionResult.NoWalletFound -> Result.failure(IllegalStateException("No Solana wallet was found"))
             is TransactionResult.Failure -> mapWalletFailure(result.e)
         }
     }
@@ -88,7 +88,7 @@ class MobileWalletSessionManager(activity: ComponentActivity) {
     private fun mapWalletFailure(error: Throwable): Result<SignedTransactionResult> {
         val message = error.message.orEmpty().lowercase()
         if (message.contains("reject") || message.contains("deny") || message.contains("cancel")) {
-            return Result.failure(IllegalStateException("Transaction was rejected in wallet"))
+            return Result.failure(IllegalStateException("Wallet approval was cancelled"))
         }
         if (message.contains("auth")) {
             return Result.failure(IllegalStateException("Wallet session expired. Reconnect and retry"))

@@ -39,7 +39,7 @@ Theme lock: Seeker visual system preserved
 | Dev-speak removal in user UI copy | PASS | No dev/debug/placeholder strings in visible screen text |
 | Cart/vote/booking/tip sheet interactions | PASS | All sheet families present in template modules |
 | CTA destination parity in creator portfolio | PASS | `Contact` and `View all` now open user-facing sheets |
-| Full editor parity (color/font/emoji controls from canonical HTML) | PASS | Style Controls section added with accent/font/icon choices and live header reflection |
+| Full editor parity (color/font/profile mark controls from canonical HTML) | PASS | Style section added with accent/font/mark choices and live header reflection |
 
 ## Immediate Fix List
 

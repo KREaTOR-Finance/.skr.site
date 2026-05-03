@@ -15,7 +15,7 @@ fun Project.readConfig(name: String): String? =
 
 android {
     namespace = "com.skrstudio.app"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.skrstudio.app"
@@ -105,9 +105,9 @@ dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.google.android.material:material:1.12.0")
 
-    implementation("com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.0.3")
-    implementation("com.solanamobile:mobile-wallet-adapter-common:2.0.3")
-    implementation("com.solanamobile:web3-solana-jvm:0.3.0-beta4")
+    implementation("com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.1.0")
+    implementation("com.solanamobile:mobile-wallet-adapter-common:2.1.0")
+    implementation("com.solanamobile:web3-solana-jvm:0.3.2-beta6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")

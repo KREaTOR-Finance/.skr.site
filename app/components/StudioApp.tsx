@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   createDefaultAuthorizationCache,
   createDefaultChainSelector,
@@ -13,10 +14,31 @@ import type { PublishResult, ScreenId, TemplateCustomization } from "@/app/lib/t
 import { buildTemplateHtml, createContentUriAndHash } from "@/app/lib/publish";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter } from "@/app/lib/wallet";
 import {
-  fetchUnlockAccountState,
-  preflightUnlockPurchase,
-  signAndSendAtomicPublishTx,
-  signAndSendUnlockTx,
+  createInitialTemplateDrafts,
+  defaultDraftFor,
+  draftSummary,
+  validateDraft,
+  type CalendarDraft,
+  type CoachItem,
+  type DaoDraft,
+  type EventItem,
+  type HealthDraft,
+  type LinkBioDraft,
+  type LinkItem,
+  type MetricItem,
+  type ProductItem,
+  type ProposalItem,
+  type SessionItem,
+  type ShopStoreDraft,
+  type SupporterItem,
+  type TemplateDraft,
+  type WorkoutItem,
+} from "@/app/lib/templateDrafts";
+import {
+  fetchTemplateEntitlementState,
+  preflightTemplatePurchase,
+  signAndSendPublishTx,
+  signAndSendPurchaseTx,
   toUserFacingChainError,
 } from "@/app/lib/chain";
 
@@ -24,7 +46,7 @@ const baseCustomization: TemplateCustomization = {
   headline: "Thomas",
   subtext: "Builder on Solana · Seeker",
   accentColor: "#00C9A7",
-  emoji: "⚡",
+  mark: "SKR",
   links: [
     { label: "X", url: "https://x.com" },
     { label: "Discord", url: "https://discord.com" },
@@ -52,173 +74,16 @@ const screenTitle: Record<ScreenId, string> = {
   publish: "Publish",
 };
 
-type TemplateMockStat = { label: string; value: string };
-type TemplateMockModule = { title: string; desc: string; state: string };
-type TemplateMock = {
-  title: string;
-  subtitle: string;
-  badge: string;
-  image: string;
-  stats: TemplateMockStat[];
-  modules: TemplateMockModule[];
-  cta: string;
-};
-
-const templateMocks: Partial<Record<ScreenId, TemplateMock>> = {
-  socialhub: {
-    title: "Social Hub",
-    subtitle: "All channels, creator links, and collab CTA in one stacked profile.",
-    badge: "Network Reach 24.8k",
-    image: "/seeker/23e396f4-d235-44aa-88d2-76a447661e92.jpg",
-    stats: [
-      { label: "Links", value: "12 live" },
-      { label: "Clicks", value: "2,486" },
-      { label: "CTR", value: "18.4%" },
-    ],
-    modules: [
-      { title: "Platform sections", desc: "Grouped links by social, creator, web3, and collab.", state: "Ready" },
-      { title: "Featured CTA card", desc: "Prominent collaboration call-to-action block.", state: "Ready" },
-      { title: "Live activity strip", desc: "Views, clicks, and links with mini trend bars.", state: "Ready" },
-    ],
-    cta: "Publish social hub",
-  },
-  shopstore: {
-    title: "Shop / Store",
-    subtitle: "Creator commerce layout with products, featured drop, and cart flow.",
-    badge: "30d Volume ◎ 24.0",
-    image: "/seeker/65d15055-54ce-4448-ae0c-81df21169c7b.jpg",
-    stats: [
-      { label: "Products", value: "6 listed" },
-      { label: "Sales", value: "47" },
-      { label: "Growth", value: "+18%" },
-    ],
-    modules: [
-      { title: "Featured drop", desc: "Hero NFT card with timer, price, and mint progress.", state: "Ready" },
-      { title: "Category filters", desc: "All, NFT, digital, and merch category tabs.", state: "Ready" },
-      { title: "Cart and checkout", desc: "Floating cart button, line items, and checkout CTA.", state: "Ready" },
-    ],
-    cta: "Publish storefront",
-  },
-  creatorportfolio: {
-    title: "Creator Portfolio",
-    subtitle: "Project-first page with skills, media references, and hire CTA.",
-    badge: "Featured Works 9",
-    image: "/seeker/c1f20297-bc8f-432e-9109-52a156b33052.jpg",
-    stats: [
-      { label: "Projects", value: "9" },
-      { label: "Mentions", value: "3 press" },
-      { label: "Skill tags", value: "8" },
-    ],
-    modules: [
-      { title: "Hero spotlight", desc: "Featured project card with tags and outbound action.", state: "Ready" },
-      { title: "Masonry gallery", desc: "Multi-size project cards for visual storytelling.", state: "Ready" },
-      { title: "Work with me", desc: "Hiring and collaboration action panel.", state: "Ready" },
-    ],
-    cta: "Publish portfolio",
-  },
-  calendarevents: {
-    title: "Calendar & Events",
-    subtitle: "Livestream countdown, event cards, and session booking modules.",
-    badge: "Upcoming 4 events",
-    image: "/seeker/7bacfb70-390e-4020-8f6e-14b4476ab332.jpg",
-    stats: [
-      { label: "Events", value: "4 active" },
-      { label: "RSVP", value: "198" },
-      { label: "Bookings", value: "6 slots" },
-    ],
-    modules: [
-      { title: "Countdown hero", desc: "Live timer for the next stream event.", state: "Ready" },
-      { title: "Event cards", desc: "Workshop, livestream, meetup, and AMA cards.", state: "Ready" },
-      { title: "Booking flow", desc: "Selectable slots and paid/free session booking.", state: "Ready" },
-    ],
-    cta: "Publish events page",
-  },
-  healthfitness: {
-    title: "Health & Fitness",
-    subtitle: "Progress rings, workouts, nutrition tracking, and coach booking.",
-    badge: "Streak 47 days",
-    image: "/seeker/ae73a8c4-be73-4d6b-9d2c-c0c8853663d5.jpg",
-    stats: [
-      { label: "Workout plans", value: "3" },
-      { label: "Calories", value: "2,340" },
-      { label: "Coaches", value: "3" },
-    ],
-    modules: [
-      { title: "Daily rings", desc: "Move, exercise, and stand progress indicators.", state: "Ready" },
-      { title: "Weekly analytics", desc: "Steps and calories trend visual blocks.", state: "Ready" },
-      { title: "Coach booking", desc: "Trainer cards and session booking sheet.", state: "Ready" },
-    ],
-    cta: "Publish fitness page",
-  },
-  daogovernance: {
-    title: "DAO Governance",
-    subtitle: "Treasury dashboards, proposals, votes, and delegation controls.",
-    badge: "Treasury 24,847 SOL",
-    image: "/seeker/cee457f5-fd04-4acd-bd4f-953053dcfaaf.jpg",
-    stats: [
-      { label: "Proposals", value: "5 active" },
-      { label: "Voters", value: "340" },
-      { label: "Quorum", value: "87%" },
-    ],
-    modules: [
-      { title: "Treasury board", desc: "Fund allocation cards and progress bars.", state: "Ready" },
-      { title: "Vote workflows", desc: "Proposal filters, vote sheet, and status chips.", state: "Ready" },
-      { title: "Delegation controls", desc: "Delegate modal and council member listing.", state: "Ready" },
-    ],
-    cta: "Publish governance hub",
-  },
-  linkbio: {
-    title: "Link-in-Bio+",
-    subtitle: "Link stack, analytics, supporter feed, and SOL tip jar.",
-    badge: "Page Views 8,247",
-    image: "/seeker/f45801fe-0371-44bb-9403-37968e647454.jpg",
-    stats: [
-      { label: "Links", value: "6 active" },
-      { label: "Tips", value: "47.2 SOL" },
-      { label: "Supporters", value: "128" },
-    ],
-    modules: [
-      { title: "Interactive stack", desc: "High-contrast links with click counters.", state: "Ready" },
-      { title: "Media embeds", desc: "Video/audio/NFT preview blocks.", state: "Ready" },
-      { title: "Tip flow", desc: "Amount selector and wallet confirmation sheet.", state: "Ready" },
-    ],
-    cta: "Publish link-in-bio",
-  },
-};
-
-type EditableTemplateContent = {
-  heroTitle: string;
-  heroSubtitle: string;
-  stats: TemplateMockStat[];
-  modules: TemplateMockModule[];
-  cta: string;
-};
-
-function createInitialTemplateInputs(): Record<string, EditableTemplateContent> {
-  const initial: Record<string, EditableTemplateContent> = {};
-  for (const template of templates) {
-    const mock = templateMocks[template.screen];
-    if (!mock) continue;
-    initial[template.id] = {
-      heroTitle: mock.title,
-      heroSubtitle: mock.subtitle,
-      stats: mock.stats.map((s) => ({ ...s })),
-      modules: mock.modules.map((m) => ({ ...m })),
-      cta: mock.cta,
-    };
-  }
-  return initial;
-}
-
-const STORAGE_VERSION = 1;
-const TEMPLATE_INPUTS_KEY = `skr:template-inputs:v${STORAGE_VERSION}`;
+const STORAGE_VERSION = 2;
+const TEMPLATE_INPUTS_KEY = `skr:template-drafts:v${STORAGE_VERSION}`;
 const PURCHASES_KEY = `skr:purchases:v${STORAGE_VERSION}`;
 const MAINNET_RPC_URLS = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "https://api.mainnet-beta.solana.com")
   .split(",")
   .map((v) => v.trim())
   .filter(Boolean);
+const SOLANA_CHAIN = process.env.NEXT_PUBLIC_SOLANA_CHAIN === "devnet" ? "solana:devnet" : "solana:mainnet";
 
-type StoredTemplateInputs = Record<string, Record<string, EditableTemplateContent>>;
+type StoredTemplateInputs = Record<string, Record<string, TemplateDraft>>;
 type StoredPurchases = Record<string, string[]>;
 
 function readJsonSafe<T>(key: string, fallback: T): T {
@@ -245,7 +110,7 @@ export default function StudioApp() {
   const [wallet, setWallet] = useState<BrowserWalletAdapter | null>(null);
   const [walletUnlocked, setWalletUnlocked] = useState(false);
   const [ownedTemplateIds, setOwnedTemplateIds] = useState<string[]>([]);
-  const [templateInputs, setTemplateInputs] = useState<Record<string, EditableTemplateContent>>(() => createInitialTemplateInputs());
+  const [templateDrafts, setTemplateDrafts] = useState<Record<string, TemplateDraft>>(() => createInitialTemplateDrafts());
   const [chainSyncing, setChainSyncing] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
@@ -259,7 +124,7 @@ export default function StudioApp() {
         uri: "https://skr.site",
       },
       authorizationCache: createDefaultAuthorizationCache(),
-      chains: ["solana:mainnet"],
+      chains: [SOLANA_CHAIN],
       chainSelector: createDefaultChainSelector(),
       onWalletNotFound: createDefaultWalletNotFoundHandler(),
     });
@@ -278,9 +143,14 @@ export default function StudioApp() {
 
   const selectedTemplateOwned = !selectedTemplate.premium || ownedTemplateIds.includes(selectedTemplate.id);
 
-  const selectedTemplateInput = useMemo(
-    () => templateInputs[selectedTemplate.id],
-    [templateInputs, selectedTemplate.id],
+  const selectedTemplateDraft = useMemo(
+    () => templateDrafts[selectedTemplate.id] ?? defaultDraftFor(selectedTemplate.id),
+    [templateDrafts, selectedTemplate.id],
+  );
+
+  const selectedTemplateErrors = useMemo(
+    () => validateDraft(selectedTemplateDraft),
+    [selectedTemplateDraft],
   );
 
   useEffect(() => {
@@ -289,7 +159,7 @@ export default function StudioApp() {
     const allInputs = readJsonSafe<StoredTemplateInputs>(TEMPLATE_INPUTS_KEY, {});
     const allPurchases = readJsonSafe<StoredPurchases>(PURCHASES_KEY, {});
     if (allInputs[walletKey]) {
-      setTemplateInputs((prev) => ({ ...prev, ...allInputs[walletKey] }));
+      setTemplateDrafts((prev) => ({ ...prev, ...allInputs[walletKey] }));
     }
     if (allPurchases[walletKey]) {
       setOwnedTemplateIds(allPurchases[walletKey]);
@@ -299,14 +169,21 @@ export default function StudioApp() {
     (async () => {
       setChainSyncing(true);
       try {
-        const chainState = await fetchUnlockAccountState({
-          rpcUrls: MAINNET_RPC_URLS,
-          wallet: wallet.publicKey,
-        });
+        const premiumStates = await Promise.all(
+          premiumTemplateIds.map(async (templateId) => ({
+            templateId,
+            state: await fetchTemplateEntitlementState({
+              rpcUrls: MAINNET_RPC_URLS,
+              wallet: wallet.publicKey,
+              templateId,
+            }),
+          })),
+        );
         if (cancelled) return;
-        setWalletUnlocked(chainState.unlocked);
-        if (chainState.unlocked) {
-          setOwnedTemplateIds((prev) => Array.from(new Set([...prev, ...premiumTemplateIds])));
+        const purchased = premiumStates.filter((item) => item.state.purchased).map((item) => item.templateId);
+        setWalletUnlocked(purchased.length > 0);
+        if (purchased.length > 0) {
+          setOwnedTemplateIds((prev) => Array.from(new Set([...prev, ...purchased])));
         }
       } catch {
         if (!cancelled) setToast("We could not check your template access");
@@ -332,9 +209,9 @@ export default function StudioApp() {
     if (!wallet) return;
     const walletKey = wallet.publicKey.toBase58();
     const current = readJsonSafe<StoredTemplateInputs>(TEMPLATE_INPUTS_KEY, {});
-    current[walletKey] = templateInputs;
+    current[walletKey] = templateDrafts;
     window.localStorage.setItem(TEMPLATE_INPUTS_KEY, JSON.stringify(current));
-  }, [wallet, templateInputs]);
+  }, [wallet, templateDrafts]);
 
   function goto(next: ScreenId) {
     setHistory((h) => [...h, screen]);
@@ -374,18 +251,21 @@ export default function StudioApp() {
       setToast("Purchase this template before publishing");
       return;
     }
+    if (selectedTemplateErrors.length > 0) {
+      setToast("Finish the required fields before publishing");
+      return;
+    }
 
     setIsPublishing(true);
     try {
-      const domain = `${customization.headline.toLowerCase().replace(/\s+/g, "")}.skr`;
-      const extraSections = buildTemplateSections(selectedTemplateInput);
-      const html = buildTemplateHtml(domain, selectedTemplate.title, customization, extraSections);
+      const domain = `${selectedTemplateDraft.headline.toLowerCase().replace(/[^a-z0-9-]/g, "")}.skr`;
+      const html = buildTemplateHtml(domain, selectedTemplate.title, selectedTemplateDraft);
       const { contentHash, contentUri, publicUrl, metadataRecords } = await createContentUriAndHash(html, {
         domain,
         templateId: selectedTemplate.id,
       });
 
-      const signature = await signAndSendAtomicPublishTx({
+      const signature = await signAndSendPublishTx({
         rpcUrls: MAINNET_RPC_URLS,
         wallet,
         payload: {
@@ -404,10 +284,6 @@ export default function StudioApp() {
       });
 
       setPublishResult({ signature, contentHash, contentUri, publicUrl });
-      if (selectedTemplate.premium) {
-        setWalletUnlocked(true);
-        setOwnedTemplateIds((prev) => Array.from(new Set([...prev, ...premiumTemplateIds])));
-      }
       setToast("Your .skr page is live");
       goto("preview");
     } catch (error) {
@@ -435,42 +311,44 @@ export default function StudioApp() {
 
     setIsPurchasing(true);
     try {
-      const preflight = await preflightUnlockPurchase({
+      const preflight = await preflightTemplatePurchase({
         rpcUrls: MAINNET_RPC_URLS,
         wallet: wallet.publicKey,
+        templateId,
       });
-      if (!preflight.unlockedOnChain) {
+      if (!preflight.purchasedOnChain) {
         if (!preflight.tokenAccountExists) {
-          setToast("SKR token account not found. Create/receive SKR first, then retry.");
+          setToast("We could not find SKR in this wallet. Add SKR, then try again.");
           return;
         }
         if (!preflight.enoughBalance) {
-          setToast(`Insufficient SKR. Need ${SKR_UNLOCK_AMOUNT_UI}, have ${preflight.uiBalance.toFixed(2)}.`);
+          setToast(`Not enough SKR. Need ${SKR_UNLOCK_AMOUNT_UI}, have ${preflight.uiBalance.toFixed(2)}.`);
           return;
         }
       }
 
-      const signature = await signAndSendUnlockTx({
+      const signature = await signAndSendPurchaseTx({
         rpcUrls: MAINNET_RPC_URLS,
         wallet,
         templateId,
       });
 
       try {
-        const chainState = await fetchUnlockAccountState({
+        const chainState = await fetchTemplateEntitlementState({
           rpcUrls: MAINNET_RPC_URLS,
           wallet: wallet.publicKey,
+          templateId,
         });
-        setWalletUnlocked(chainState.unlocked);
-        if (chainState.unlocked) {
-          setOwnedTemplateIds((ids) => Array.from(new Set([...ids, ...premiumTemplateIds])));
+        setWalletUnlocked(chainState.purchased);
+        if (chainState.purchased) {
+          setOwnedTemplateIds((ids) => Array.from(new Set([...ids, templateId])));
         }
       } catch {
         // Tx already confirmed. Keep UX unlocked and let background sync reconcile state.
         setWalletUnlocked(true);
-        setOwnedTemplateIds((ids) => Array.from(new Set([...ids, ...premiumTemplateIds])));
+        setOwnedTemplateIds((ids) => Array.from(new Set([...ids, templateId])));
       }
-      setToast(`Premium unlocked via ${template.title} purchase (${SKR_UNLOCK_AMOUNT_UI} SKR). Tx: ${signature.slice(0, 8)}...`);
+      setToast(`${template.title} unlocked for ${SKR_UNLOCK_AMOUNT_UI} SKR. Confirmation: ${signature.slice(0, 8)}...`);
     } catch (error) {
       setToast(toUserFacingChainError(error));
     } finally {
@@ -478,181 +356,69 @@ export default function StudioApp() {
     }
   }
 
-  function updateTemplateInput(
-    templateId: string,
-    updater: (current: EditableTemplateContent) => EditableTemplateContent,
-  ) {
-    setTemplateInputs((prev) => {
-      const base = prev[templateId] ?? createInitialTemplateInputs()[templateId];
-      if (!base) return prev;
-      return { ...prev, [templateId]: updater(base) };
-    });
+  function updateTemplateDraft(nextDraft: TemplateDraft) {
+    setTemplateDrafts((prev) => ({ ...prev, [nextDraft.templateId]: nextDraft }));
   }
 
   const editorPanel = (
-    <section className="panel card-glow">
-      <h2>{selectedTemplate.title} Editor</h2>
-      <p>{selectedTemplate.description}</p>
-
-      {selectedTemplate.premium && !selectedTemplateOwned ? (
-        <div className="panel locked-panel">
-          <h3>Template Locked</h3>
-          <p>Purchase this premium template to unlock custom fields and publishing.</p>
-          <button className="btn btn-primary" onClick={() => handlePurchase(selectedTemplate.id)} disabled={isPurchasing}>
-            {isPurchasing ? "Purchasing..." : `Purchase Template (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
-          </button>
-        </div>
-      ) : (
-        <>
-          <label className="field">
-            Headline
-            <input
-              value={customization.headline}
-              onChange={(e) => setCustomization((c) => ({ ...c, headline: e.target.value }))}
-            />
-          </label>
-          <label className="field">
-            Subtext
-            <textarea
-              value={customization.subtext}
-              onChange={(e) => setCustomization((c) => ({ ...c, subtext: e.target.value }))}
-            />
-          </label>
-          <div className="row">
-            <label className="field compact">
-              Accent
-              <input
-                type="color"
-                value={customization.accentColor}
-                onChange={(e) => setCustomization((c) => ({ ...c, accentColor: e.target.value }))}
-              />
-            </label>
-            <label className="field compact">
-              Emoji
-              <input
-                value={customization.emoji}
-                onChange={(e) => setCustomization((c) => ({ ...c, emoji: e.target.value }))}
-              />
-            </label>
-          </div>
-
-          {selectedTemplateInput && (
-            <div className="editor-group">
-              <h3>Template Content</h3>
-              <label className="field">
-                Hero Title
-                <input
-                  value={selectedTemplateInput.heroTitle}
-                  onChange={(e) =>
-                    updateTemplateInput(selectedTemplate.id, (curr) => ({ ...curr, heroTitle: e.target.value }))
-                  }
-                />
-              </label>
-              <label className="field">
-                Hero Subtitle
-                <textarea
-                  value={selectedTemplateInput.heroSubtitle}
-                  onChange={(e) =>
-                    updateTemplateInput(selectedTemplate.id, (curr) => ({ ...curr, heroSubtitle: e.target.value }))
-                  }
-                />
-              </label>
-              <div className="editor-grid">
-                {selectedTemplateInput.stats.map((stat, idx) => (
-                  <div key={idx} className="panel editor-card">
-                    <label className="field">
-                      Stat Label
-                      <input
-                        value={stat.label}
-                        onChange={(e) =>
-                          updateTemplateInput(selectedTemplate.id, (curr) => ({
-                            ...curr,
-                            stats: curr.stats.map((s, i) => (i === idx ? { ...s, label: e.target.value } : s)),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Stat Value
-                      <input
-                        value={stat.value}
-                        onChange={(e) =>
-                          updateTemplateInput(selectedTemplate.id, (curr) => ({
-                            ...curr,
-                            stats: curr.stats.map((s, i) => (i === idx ? { ...s, value: e.target.value } : s)),
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-              <div className="editor-grid">
-                {selectedTemplateInput.modules.map((module, idx) => (
-                  <div key={idx} className="panel editor-card">
-                    <label className="field">
-                      Module Title
-                      <input
-                        value={module.title}
-                        onChange={(e) =>
-                          updateTemplateInput(selectedTemplate.id, (curr) => ({
-                            ...curr,
-                            modules: curr.modules.map((m, i) => (i === idx ? { ...m, title: e.target.value } : m)),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Description
-                      <textarea
-                        value={module.desc}
-                        onChange={(e) =>
-                          updateTemplateInput(selectedTemplate.id, (curr) => ({
-                            ...curr,
-                            modules: curr.modules.map((m, i) => (i === idx ? { ...m, desc: e.target.value } : m)),
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-              <label className="field">
-                Publish CTA Label
-                <input
-                  value={selectedTemplateInput.cta}
-                  onChange={(e) =>
-                    updateTemplateInput(selectedTemplate.id, (curr) => ({ ...curr, cta: e.target.value }))
-                  }
-                />
-              </label>
-            </div>
-          )}
-
-          <button className="btn btn-primary" onClick={() => goto("publish")}>Continue to Publish</button>
-        </>
-      )}
-    </section>
+    <TemplateRoutePanel
+      template={selectedTemplate}
+      draft={selectedTemplateDraft}
+      locked={Boolean(selectedTemplate.premium && !selectedTemplateOwned)}
+      errors={selectedTemplateErrors}
+      isPurchasing={isPurchasing}
+      onPurchase={() => handlePurchase(selectedTemplate.id)}
+      onDraftChange={updateTemplateDraft}
+      onContinue={() => goto("publish")}
+    />
   );
+
+  function renderTemplatePanel(templateId: string) {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return null;
+    const draft = templateDrafts[templateId] ?? defaultDraftFor(templateId);
+    const errors = validateDraft(draft);
+    const locked = Boolean(template.premium && !ownedTemplateIds.includes(template.id));
+    return (
+      <TemplateRoutePanel
+        template={template}
+        draft={draft}
+        locked={locked}
+        errors={errors}
+        isPurchasing={isPurchasing}
+        onPurchase={() => handlePurchase(template.id)}
+        onDraftChange={updateTemplateDraft}
+        onContinue={() => {
+          setSelectedTemplateId(template.id);
+          goto("publish");
+        }}
+      />
+    );
+  }
 
   return (
     <main className="studio-shell">
       <div className="ambient ambient-a" />
       <div className="ambient ambient-b" />
-      <div className="topbar">
-        <button className="btn btn-ghost btn-sm" onClick={back} disabled={history.length === 0}>Back</button>
-        <h1>{screenTitle[screen]}</h1>
-        <button className="btn btn-ghost btn-sm" onClick={() => goto("settings")}>Settings</button>
-      </div>
+      {screen !== "splash" && (
+        <div className="topbar">
+          <button className="btn btn-ghost btn-sm" onClick={back} disabled={history.length === 0}>Back</button>
+          <h1>{screenTitle[screen]}</h1>
+          <button className="btn btn-ghost btn-sm" onClick={() => goto("settings")}>Settings</button>
+        </div>
+      )}
 
       {screen === "splash" && (
-        <section className="center-stack">
-          <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={170} height={170} className="hero-logo brand-logo" priority />
+        <section className="center-stack welcome-splash">
+          <div className="welcome-logo-wrap">
+            <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={190} height={190} className="hero-logo brand-logo" priority />
+          </div>
+          <span className="welcome-kicker">Seeker identity studio</span>
           <h2><span className="shimmer-text">.skr</span> Studio</h2>
-          <p>Seeker-native pages. On-chain publish. Premium templates unlocked by SKR.</p>
-          <div className="row">
-            <button className="btn btn-primary" onClick={() => goto("art")}>Launch Studio</button>
-            <button className="btn btn-ghost" onClick={() => nav("home")}>Skip Intro</button>
+          <p>Your Solana identity, beautifully packaged for Seeker.</p>
+          <div className="welcome-actions">
+            <button className="btn btn-primary" onClick={() => nav("home")}>Start building</button>
+            <a className="btn btn-ghost" href="/reverse">Find a .skr</a>
           </div>
         </section>
       )}
@@ -663,9 +429,9 @@ export default function StudioApp() {
             <Image src="/seeker/image.jpg" alt="Art mood" width={420} height={520} className="cover" />
           </article>
           <article className="panel card-glow">
-            <h2>Studio Direction</h2>
-            <p>Chrome + teal-cyan visual language, motion-forward cards, and mobile-first layout optimized for Seeker users.</p>
-            <button className="btn btn-primary" onClick={() => nav("home")}>Enter Dashboard</button>
+            <h2>Built for Seeker</h2>
+            <p>Black glass, teal glow, chrome details, and mobile-first pages that feel at home on your device.</p>
+            <button className="btn btn-primary" onClick={() => nav("home")}>Start building</button>
           </article>
         </section>
       )}
@@ -673,8 +439,8 @@ export default function StudioApp() {
       {screen === "home" && (
         <section className="grid two">
           <article className="panel card-glow">
-            <h2>{customization.headline}<span className="shimmer-text">.skr</span></h2>
-            <p>{customization.subtext}</p>
+            <h2>{selectedTemplateDraft.headline}<span className="shimmer-text">.skr</span></h2>
+            <p>{selectedTemplateDraft.subtext}</p>
             <div className="chip-row">
               <span className="chip">Solana</span>
               <span className="chip">Seeker ready</span>
@@ -701,7 +467,7 @@ export default function StudioApp() {
             >
               <Image src={template.image} alt={template.title} width={320} height={240} className="cover" />
               <div className="template-meta">
-                <strong>{template.emoji} {template.title}</strong>
+                <strong><span className="template-mark">{template.mark}</span> {template.title}</strong>
                 <span>{template.description}</span>
                 {template.premium ? (
                   ownedTemplateIds.includes(template.id) ? (
@@ -718,14 +484,14 @@ export default function StudioApp() {
         </section>
       )}
 
-      {screen === "socialhub" && <TemplateMockScreen screenId="socialhub" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "shopstore" && <TemplateMockScreen screenId="shopstore" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "creatorportfolio" && <TemplateMockScreen screenId="creatorportfolio" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "calendarevents" && <TemplateMockScreen screenId="calendarevents" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "healthfitness" && <TemplateMockScreen screenId="healthfitness" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "daogovernance" && <TemplateMockScreen screenId="daogovernance" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "linkbio" && <TemplateMockScreen screenId="linkbio" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
-      {screen === "social" && <TemplateMockScreen screenId="socialhub" templateInputs={templateInputs} ownedTemplateIds={ownedTemplateIds} isPurchasing={isPurchasing} onPurchase={handlePurchase} onEdit={() => goto("editor")} onPublish={() => goto("publish")} onAction={(m) => setToast(m)} />}
+      {screen === "socialhub" && renderTemplatePanel("social-hub")}
+      {screen === "shopstore" && renderTemplatePanel("shop")}
+      {screen === "creatorportfolio" && renderTemplatePanel("portfolio")}
+      {screen === "calendarevents" && renderTemplatePanel("calendar")}
+      {screen === "healthfitness" && renderTemplatePanel("health")}
+      {screen === "daogovernance" && renderTemplatePanel("organization")}
+      {screen === "linkbio" && renderTemplatePanel("link-in-bio")}
+      {screen === "social" && renderTemplatePanel("social-hub")}
 
       {screen === "editor" && editorPanel}
 
@@ -759,7 +525,7 @@ export default function StudioApp() {
           <h2>Creator Profile</h2>
           <p>Choose a template, personalize it, and publish a public page for your .skr name.</p>
           <ul className="bullets">
-            <li>Domain: {customization.headline.toLowerCase()}.skr</li>
+            <li>Domain: {selectedTemplateDraft.headline.toLowerCase()}.skr</li>
             <li>Template: {selectedTemplate.title}</li>
             <li>Premium access: {walletUnlocked ? "ready" : "locked"}</li>
           </ul>
@@ -802,7 +568,15 @@ export default function StudioApp() {
             <span>Wallet: {wallet ? walletAddressShort(wallet.publicKey.toBase58()) : "Not connected"}</span>
             <span>Premium status: {selectedTemplateOwned ? "Unlocked" : "Locked"}</span>
           </div>
-          <button className="btn btn-primary" onClick={handlePublish} disabled={isPublishing || (selectedTemplate.premium && !selectedTemplateOwned)}>
+          {selectedTemplateErrors.length > 0 && (
+            <div className="panel locked-panel">
+              <strong>Before publishing</strong>
+              <ul className="bullets">
+                {selectedTemplateErrors.map((error) => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <button className="btn btn-primary" onClick={handlePublish} disabled={isPublishing || selectedTemplateErrors.length > 0 || (selectedTemplate.premium && !selectedTemplateOwned)}>
             {isPublishing ? "Publishing..." : "Review in Wallet"}
           </button>
           <button className="btn btn-ghost" onClick={() => goto("editor")}>Back to Editor</button>
@@ -815,16 +589,16 @@ export default function StudioApp() {
             <Image src="/brand/skr-logo.jpg" alt=".skr Studio" width={42} height={42} />
             <span>Published from .skr Studio</span>
           </div>
-          <h2>Publish Receipt</h2>
-          <p>Your latest publish details will appear here after your wallet confirms the update.</p>
+          <h2>Your page is ready</h2>
+          <p>Your saved page details will appear here after your wallet approves the update.</p>
           {publishResult ? (
             <div className="stack mono">
-              <span>Signature: {publishResult.signature}</span>
-              <span>Hash: {publishResult.contentHash}</span>
-              <a href={publishResult.publicUrl ?? publishResult.contentUri} target="_blank" rel="noreferrer" className="link-inline">Open uploaded content</a>
+              <span>Confirmation: {publishResult.signature}</span>
+              <span>Page proof: {publishResult.contentHash}</span>
+              <a href={publishResult.publicUrl ?? publishResult.contentUri} target="_blank" rel="noreferrer" className="link-inline">Open public page</a>
             </div>
           ) : (
-            <p>No publish receipt yet.</p>
+            <p>Your published page will appear here after wallet approval.</p>
           )}
           <div className="row">
             <button className="btn btn-primary" onClick={() => nav("home")}>Go Home</button>
@@ -848,73 +622,30 @@ export default function StudioApp() {
   );
 }
 
-function buildTemplateSections(input?: EditableTemplateContent): string[] {
-  if (!input) return [];
-  const esc = (value: string) =>
-    value
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-
-  const stats = input.stats
-    .filter((s) => s.label.trim() || s.value.trim())
-    .map((s) => `<li><strong>${esc(s.label || "Metric")}:</strong> ${esc(s.value || "-")}</li>`)
-    .join("");
-  const modules = input.modules
-    .filter((m) => m.title.trim() || m.desc.trim())
-    .map((m) => `<li><strong>${esc(m.title || "Module")}:</strong> ${esc(m.desc || "-")}</li>`)
-    .join("");
-
-  return [
-    `<section><h2>${esc(input.heroTitle)}</h2><p>${esc(input.heroSubtitle)}</p></section>`,
-    `<section><h3>Stats</h3><ul>${stats}</ul></section>`,
-    `<section><h3>Page sections</h3><ul>${modules}</ul></section>`,
-    `<section><p><strong>CTA:</strong> ${esc(input.cta)}</p></section>`,
-  ];
-}
-
-function TemplateMockScreen({
-  screenId,
-  templateInputs,
-  ownedTemplateIds,
+function TemplateRoutePanel({
+  template,
+  draft,
+  locked,
+  errors,
   isPurchasing,
   onPurchase,
-  onEdit,
-  onPublish,
-  onAction,
+  onDraftChange,
+  onContinue,
 }: {
-  screenId: ScreenId;
-  templateInputs: Record<string, EditableTemplateContent>;
-  ownedTemplateIds: string[];
+  template: (typeof templates)[number];
+  draft: TemplateDraft;
+  locked: boolean;
+  errors: string[];
   isPurchasing: boolean;
-  onPurchase: (templateId: string) => Promise<void> | void;
-  onEdit: () => void;
-  onPublish: () => void;
-  onAction: (message: string) => void;
+  onPurchase: () => Promise<void> | void;
+  onDraftChange: (draft: TemplateDraft) => void;
+  onContinue: () => void;
 }) {
-  const template = templates.find((t) => t.screen === screenId);
-  const mock = template ? templateMocks[screenId] : undefined;
-  if (!mock) return null;
-  const locked = Boolean(template?.premium && !ownedTemplateIds.includes(template.id));
-  const edit = template ? templateInputs[template.id] : undefined;
-
-  const display = edit
-    ? {
-        ...mock,
-        title: edit.heroTitle || mock.title,
-        subtitle: edit.heroSubtitle || mock.subtitle,
-        stats: edit.stats.length ? edit.stats : mock.stats,
-        modules: edit.modules.length ? edit.modules : mock.modules,
-        cta: edit.cta || mock.cta,
-      }
-    : mock;
-
+  const display = draftSummary(draft);
   return (
     <section className="mock-shell">
       <article className="panel card-glow mock-hero">
-        <Image src={display.image} alt={display.title} width={480} height={300} className="cover mock-cover" />
+        <Image src={template.image} alt={template.title} width={480} height={300} className="cover mock-cover" />
         <div className="mock-overlay" />
         <div className="mock-content">
           <div className="chip">{display.badge}</div>
@@ -933,19 +664,21 @@ function TemplateMockScreen({
       </div>
 
       <article className="panel">
-        <h3>What This Page Includes</h3>
+        <h3>What This Page Shows</h3>
         <div className="mock-module-list">
           {display.modules.map((m) => (
-            <button key={m.title} className="mock-module" onClick={() => onAction(`${m.title} preview opened`)}>
+            <div key={m.title} className="mock-module">
               <div>
                 <strong>{m.title}</strong>
                 <p>{m.desc}</p>
               </div>
-              <span className="chip">{m.state}</span>
-            </button>
+              <span className="chip">Included</span>
+            </div>
           ))}
         </div>
       </article>
+
+      <DraftLiveModules draft={draft} />
 
       <article className="panel">
         <h3>Activity Snapshot</h3>
@@ -958,26 +691,453 @@ function TemplateMockScreen({
         </div>
       </article>
 
-      <article className="panel card-glow">
-        <h3>{locked ? "Unlock This Template" : "Ready To Launch"}</h3>
-        <p>
-          {locked
-            ? `Buy this premium template (${SKR_UNLOCK_AMOUNT_UI} SKR) to unlock editing and publishing.`
-            : "This template is ready to edit, preview, and publish."}
-        </p>
-        <div className="row">
-              {locked && template ? (
-            <button className="btn btn-primary" onClick={() => onPurchase(template.id)} disabled={isPurchasing}>
-              {isPurchasing ? "Purchasing..." : "Purchase Template"}
-            </button>
-          ) : (
-            <>
-              <button className="btn btn-primary" onClick={onEdit}>Open Editor</button>
-              <button className="btn btn-ghost" onClick={onPublish}>{display.cta}</button>
-            </>
+      {locked ? (
+        <article className="panel card-glow">
+          <h3>Unlock This Template</h3>
+          <p>Buy this premium template once to customize and publish it from your wallet.</p>
+          <button className="btn btn-primary" onClick={onPurchase} disabled={isPurchasing}>
+            {isPurchasing ? "Purchasing..." : `Purchase Template (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
+          </button>
+        </article>
+      ) : (
+        <>
+          <StyleControls draft={draft} onDraftChange={onDraftChange} />
+          <TemplateDraftEditor draft={draft} onDraftChange={onDraftChange} />
+          {errors.length > 0 && (
+            <article className="panel locked-panel">
+              <h3>Finish These Fields</h3>
+              <ul className="bullets">
+                {errors.map((error) => <li key={error}>{error}</li>)}
+              </ul>
+            </article>
           )}
-        </div>
-      </article>
+          <div className="row">
+            <button className="btn btn-primary" onClick={onContinue} disabled={errors.length > 0}>{display.cta}</button>
+          </div>
+        </>
+      )}
     </section>
   );
+}
+
+function DraftLiveModules({ draft }: { draft: TemplateDraft }) {
+  switch (draft.templateId) {
+    case "shop":
+      return <ShopPreview draft={draft} />;
+    case "calendar":
+      return <CalendarPreview draft={draft} />;
+    case "health":
+      return <HealthPreview draft={draft} />;
+    case "organization":
+      return <DaoPreview draft={draft} />;
+    case "link-in-bio":
+      return <LinkBioPreview draft={draft} />;
+    default:
+      return null;
+  }
+}
+
+function ShopPreview({ draft }: { draft: ShopStoreDraft }) {
+  const [filter, setFilter] = useState("all");
+  const [cart, setCart] = useState<ProductItem[]>([]);
+  const products = draft.products.filter((item) => filter === "all" || item.category === filter);
+  return (
+    <article className="panel">
+      <h3>Store Preview</h3>
+      <p>Featured drop: {draft.featuredDrop.name} - {draft.featuredDrop.price}</p>
+      <div className="chip-row">
+        {["all", "nft", "digital", "merch"].map((cat) => (
+          <button key={cat} className={`chip ${filter === cat ? "active" : ""}`} onClick={() => setFilter(cat)}>{cat}</button>
+        ))}
+      </div>
+      <div className="mock-module-list">
+        {products.map((product) => (
+          <button key={`${product.name}-${product.price}`} className="mock-module" onClick={() => setCart((items) => [...items, product])}>
+            <div><strong>{product.name}</strong><p>{product.price} - {product.category}</p></div>
+            <span className="chip">Add</span>
+          </button>
+        ))}
+      </div>
+      <p>Cart: {cart.length} item{cart.length === 1 ? "" : "s"}</p>
+    </article>
+  );
+}
+
+function CalendarPreview({ draft }: { draft: CalendarDraft }) {
+  const [slot, setSlot] = useState(draft.bookingSlots[0] ?? "");
+  return (
+    <article className="panel">
+      <h3>{draft.livestreamTitle}</h3>
+      <p>Starts in {draft.livestreamStartsIn}</p>
+      <div className="mock-module-list">
+        {draft.events.map((event) => (
+          <div key={`${event.title}-${event.time}`} className="mock-module">
+            <div><strong>{event.title}</strong><p>{event.time}</p></div>
+            <span className="chip">{event.cta}</span>
+          </div>
+        ))}
+      </div>
+      <div className="chip-row">
+        {draft.bookingSlots.map((item) => (
+          <button key={item} className={`chip ${slot === item ? "active" : ""}`} onClick={() => setSlot(item)}>{item}</button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function HealthPreview({ draft }: { draft: HealthDraft }) {
+  const [running, setRunning] = useState(false);
+  return (
+    <article className="panel">
+      <h3>Fitness Preview</h3>
+      <div className="mock-stats">
+        {draft.metrics.map((metric) => (
+          <article key={metric.label} className="panel">
+            <div className="mock-stat-value">{metric.value}</div>
+            <div className="mock-stat-label">{metric.label}</div>
+          </article>
+        ))}
+      </div>
+      <button className="btn btn-ghost btn-sm" onClick={() => setRunning((v) => !v)}>{running ? "Pause timer" : "Start timer"}</button>
+    </article>
+  );
+}
+
+function DaoPreview({ draft }: { draft: DaoDraft }) {
+  const [filter, setFilter] = useState("all");
+  const proposals = draft.proposals.filter((item) => filter === "all" || item.category === filter);
+  return (
+    <article className="panel">
+      <h3>Governance Preview</h3>
+      <p>Treasury: {draft.treasury}</p>
+      <div className="chip-row">
+        {["all", "funding", "protocol", "election"].map((cat) => (
+          <button key={cat} className={`chip ${filter === cat ? "active" : ""}`} onClick={() => setFilter(cat)}>{cat}</button>
+        ))}
+      </div>
+      <div className="mock-module-list">
+        {proposals.map((proposal) => (
+          <div key={proposal.title} className="mock-module">
+            <div><strong>{proposal.title}</strong><p>{proposal.category}</p></div>
+            <span className="chip">{proposal.status}</span>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function LinkBioPreview({ draft }: { draft: LinkBioDraft }) {
+  const [range, setRange] = useState("7d");
+  return (
+    <article className="panel">
+      <h3>Link Page Preview</h3>
+      <div className="mock-module-list">
+        {draft.links.map((link) => (
+          <div key={`${link.label}-${link.url}`} className="mock-module">
+            <div><strong>{link.label}</strong><p>{link.url}</p></div>
+            <span className="chip">Open</span>
+          </div>
+        ))}
+      </div>
+      <div className="chip-row">
+        {["7d", "30d", "all"].map((item) => (
+          <button key={item} className={`chip ${range === item ? "active" : ""}`} onClick={() => setRange(item)}>{item}</button>
+        ))}
+      </div>
+      <p>Showing {range.toUpperCase()} activity</p>
+    </article>
+  );
+}
+
+function StyleControls({ draft, onDraftChange }: { draft: TemplateDraft; onDraftChange: (draft: TemplateDraft) => void }) {
+  return (
+    <article className="panel">
+      <h3>Style</h3>
+      <div className="row">
+        <label className="field compact">
+          Accent
+          <input type="color" value={draft.themeAccent} onChange={(e) => onDraftChange(updateStyle(draft, { themeAccent: e.target.value }))} />
+        </label>
+        <label className="field compact">
+          Profile mark
+          <input value={draft.profileMark} onChange={(e) => onDraftChange(updateStyle(draft, { profileMark: e.target.value }))} />
+        </label>
+        <label className="field compact">
+          Font
+          <select value={draft.fontStyle} onChange={(e) => onDraftChange(updateStyle(draft, { fontStyle: e.target.value as TemplateDraft["fontStyle"] }))}>
+            <option>Default</option>
+            <option>Bold</option>
+            <option>Italic</option>
+          </select>
+        </label>
+      </div>
+    </article>
+  );
+}
+
+function TemplateDraftEditor({ draft, onDraftChange }: { draft: TemplateDraft; onDraftChange: (draft: TemplateDraft) => void }) {
+  return (
+    <article className="panel card-glow">
+      <h3>Customize</h3>
+      <CommonFields draft={draft} onDraftChange={onDraftChange} />
+      {renderDraftFields(draft, onDraftChange)}
+    </article>
+  );
+}
+
+function CommonFields({ draft, onDraftChange }: { draft: TemplateDraft; onDraftChange: (draft: TemplateDraft) => void }) {
+  return (
+    <>
+      <label className="field">
+        Page title
+        <input value={draft.headline} onChange={(e) => onDraftChange({ ...draft, headline: e.target.value })} />
+      </label>
+      <label className="field">
+        Short intro
+        <textarea value={draft.subtext} onChange={(e) => onDraftChange({ ...draft, subtext: e.target.value })} />
+      </label>
+    </>
+  );
+}
+
+function renderDraftFields(draft: TemplateDraft, onDraftChange: (draft: TemplateDraft) => void) {
+  switch (draft.templateId) {
+    case "personal-bio":
+      return <>
+        <label className="field">About you<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
+        <EditableLinks title="Links" items={draft.links} onChange={(links) => onDraftChange({ ...draft, links })} />
+      </>;
+    case "social-hub":
+      return <>
+        <label className="field">Featured callout<input value={draft.featuredCta} onChange={(e) => onDraftChange({ ...draft, featuredCta: e.target.value })} /></label>
+        <EditableLinks title="Social links" items={draft.socialLinks} onChange={(socialLinks) => onDraftChange({ ...draft, socialLinks })} />
+        <EditableLinks title="Web3 links" items={draft.web3Links} onChange={(web3Links) => onDraftChange({ ...draft, web3Links })} />
+        <EditableLinks title="Creator links" items={draft.creatorLinks} onChange={(creatorLinks) => onDraftChange({ ...draft, creatorLinks })} />
+        <EditableMetrics title="Stats" items={draft.stats} onChange={(stats) => onDraftChange({ ...draft, stats })} />
+      </>;
+    case "shop":
+      return <>
+        <EditableProductCard title="Featured drop" item={draft.featuredDrop} onChange={(featuredDrop) => onDraftChange({ ...draft, featuredDrop })} />
+        <label className="field">Drop timer<input value={draft.dropEndsIn} onChange={(e) => onDraftChange({ ...draft, dropEndsIn: e.target.value })} /></label>
+        <EditableProducts items={draft.products} onChange={(products) => onDraftChange({ ...draft, products })} />
+        <EditableMetrics title="Stats" items={draft.stats} onChange={(stats) => onDraftChange({ ...draft, stats })} />
+      </>;
+    case "calendar":
+      return <>
+        <label className="field">Livestream title<input value={draft.livestreamTitle} onChange={(e) => onDraftChange({ ...draft, livestreamTitle: e.target.value })} /></label>
+        <label className="field">Livestream timer<input value={draft.livestreamStartsIn} onChange={(e) => onDraftChange({ ...draft, livestreamStartsIn: e.target.value })} /></label>
+        <EditableEvents items={draft.events} onChange={(events) => onDraftChange({ ...draft, events })} />
+        <EditableStringList title="Booking slots" items={draft.bookingSlots} onChange={(bookingSlots) => onDraftChange({ ...draft, bookingSlots })} />
+        <EditableSessions items={draft.sessions} onChange={(sessions) => onDraftChange({ ...draft, sessions })} />
+      </>;
+    case "health":
+      return <>
+        <EditableWorkouts items={draft.workouts} onChange={(workouts) => onDraftChange({ ...draft, workouts })} />
+        <EditableMetrics title="Metrics" items={draft.metrics} onChange={(metrics) => onDraftChange({ ...draft, metrics })} />
+        <EditableCoaches items={draft.coaches} onChange={(coaches) => onDraftChange({ ...draft, coaches })} />
+      </>;
+    case "portfolio":
+      return <>
+        <label className="field">Contact button<input value={draft.contactCta} onChange={(e) => onDraftChange({ ...draft, contactCta: e.target.value })} /></label>
+        <EditableLinks title="Projects" items={draft.projects} onChange={(projects) => onDraftChange({ ...draft, projects })} />
+        <EditableLinks title="Press" items={draft.press} onChange={(press) => onDraftChange({ ...draft, press })} />
+      </>;
+    case "organization":
+      return <>
+        <label className="field">Treasury<input value={draft.treasury} onChange={(e) => onDraftChange({ ...draft, treasury: e.target.value })} /></label>
+        <EditableProposals items={draft.proposals} onChange={(proposals) => onDraftChange({ ...draft, proposals })} />
+        <EditableLinks title="Delegates" items={draft.delegates} onChange={(delegates) => onDraftChange({ ...draft, delegates })} />
+      </>;
+    case "link-in-bio":
+      return <>
+        <EditableLinks title="Links" items={draft.links} onChange={(links) => onDraftChange({ ...draft, links })} />
+        <EditableStringList title="Tip amounts" items={draft.tipAmounts} onChange={(tipAmounts) => onDraftChange({ ...draft, tipAmounts })} />
+        <EditableSupporters items={draft.supporters} onChange={(supporters) => onDraftChange({ ...draft, supporters })} />
+        <EditableMetrics title="Analytics" items={draft.analytics} onChange={(analytics) => onDraftChange({ ...draft, analytics })} />
+      </>;
+  }
+}
+
+function EditableLinks({ title, items, onChange }: { title: string; items: LinkItem[]; onChange: (items: LinkItem[]) => void }) {
+  return <EditableSection title={title} onAdd={() => onChange([...items, { label: "", url: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.label} placeholder="Label" onChange={(e) => onChange(updateItem(items, i, { ...item, label: e.target.value }))} />
+        <input value={item.url} placeholder="Link or description" onChange={(e) => onChange(updateItem(items, i, { ...item, url: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableMetrics({ title, items, onChange }: { title: string; items: MetricItem[]; onChange: (items: MetricItem[]) => void }) {
+  return <EditableSection title={title} onAdd={() => onChange([...items, { label: "", value: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.label} placeholder="Label" onChange={(e) => onChange(updateItem(items, i, { ...item, label: e.target.value }))} />
+        <input value={item.value} placeholder="Value" onChange={(e) => onChange(updateItem(items, i, { ...item, value: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableProductCard({ title, item, onChange }: { title: string; item: ProductItem; onChange: (item: ProductItem) => void }) {
+  return <EditableSection title={title}>
+    <RowEditor index={0} count={1}>
+      <input value={item.name} placeholder="Name" onChange={(e) => onChange({ ...item, name: e.target.value })} />
+      <input value={item.price} placeholder="Price" onChange={(e) => onChange({ ...item, price: e.target.value })} />
+      <input value={item.category} placeholder="Category" onChange={(e) => onChange({ ...item, category: e.target.value.toLowerCase() })} />
+    </RowEditor>
+  </EditableSection>;
+}
+
+function EditableProducts({ items, onChange }: { items: ProductItem[]; onChange: (items: ProductItem[]) => void }) {
+  return <EditableSection title="Products" onAdd={() => onChange([...items, { name: "", price: "", category: "nft" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.name} placeholder="Name" onChange={(e) => onChange(updateItem(items, i, { ...item, name: e.target.value }))} />
+        <input value={item.price} placeholder="Price" onChange={(e) => onChange(updateItem(items, i, { ...item, price: e.target.value }))} />
+        <input value={item.category} placeholder="Category" onChange={(e) => onChange(updateItem(items, i, { ...item, category: e.target.value.toLowerCase() }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableEvents({ items, onChange }: { items: EventItem[]; onChange: (items: EventItem[]) => void }) {
+  return <EditableSection title="Events" onAdd={() => onChange([...items, { title: "", time: "", cta: "RSVP" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.title} placeholder="Event title" onChange={(e) => onChange(updateItem(items, i, { ...item, title: e.target.value }))} />
+        <input value={item.time} placeholder="Time" onChange={(e) => onChange(updateItem(items, i, { ...item, time: e.target.value }))} />
+        <input value={item.cta} placeholder="Action" onChange={(e) => onChange(updateItem(items, i, { ...item, cta: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableStringList({ title, items, onChange }: { title: string; items: string[]; onChange: (items: string[]) => void }) {
+  return <EditableSection title={title} onAdd={() => onChange([...items, ""])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item} placeholder={title} onChange={(e) => onChange(updateItem(items, i, e.target.value))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableSessions({ items, onChange }: { items: SessionItem[]; onChange: (items: SessionItem[]) => void }) {
+  return <EditableSection title="Sessions" onAdd={() => onChange([...items, { name: "", price: "", duration: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.name} placeholder="Name" onChange={(e) => onChange(updateItem(items, i, { ...item, name: e.target.value }))} />
+        <input value={item.price} placeholder="Price" onChange={(e) => onChange(updateItem(items, i, { ...item, price: e.target.value }))} />
+        <input value={item.duration} placeholder="Duration" onChange={(e) => onChange(updateItem(items, i, { ...item, duration: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableWorkouts({ items, onChange }: { items: WorkoutItem[]; onChange: (items: WorkoutItem[]) => void }) {
+  return <EditableSection title="Workouts" onAdd={() => onChange([...items, { name: "", duration: "", level: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.name} placeholder="Workout" onChange={(e) => onChange(updateItem(items, i, { ...item, name: e.target.value }))} />
+        <input value={item.duration} placeholder="Duration" onChange={(e) => onChange(updateItem(items, i, { ...item, duration: e.target.value }))} />
+        <input value={item.level} placeholder="Level" onChange={(e) => onChange(updateItem(items, i, { ...item, level: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableCoaches({ items, onChange }: { items: CoachItem[]; onChange: (items: CoachItem[]) => void }) {
+  return <EditableSection title="Coaches" onAdd={() => onChange([...items, { name: "", session: "", price: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.name} placeholder="Coach" onChange={(e) => onChange(updateItem(items, i, { ...item, name: e.target.value }))} />
+        <input value={item.session} placeholder="Session" onChange={(e) => onChange(updateItem(items, i, { ...item, session: e.target.value }))} />
+        <input value={item.price} placeholder="Price" onChange={(e) => onChange(updateItem(items, i, { ...item, price: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableProposals({ items, onChange }: { items: ProposalItem[]; onChange: (items: ProposalItem[]) => void }) {
+  return <EditableSection title="Proposals" onAdd={() => onChange([...items, { title: "", status: "Active", category: "funding" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.title} placeholder="Proposal" onChange={(e) => onChange(updateItem(items, i, { ...item, title: e.target.value }))} />
+        <input value={item.status} placeholder="Status" onChange={(e) => onChange(updateItem(items, i, { ...item, status: e.target.value }))} />
+        <input value={item.category} placeholder="Category" onChange={(e) => onChange(updateItem(items, i, { ...item, category: e.target.value.toLowerCase() }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableSupporters({ items, onChange }: { items: SupporterItem[]; onChange: (items: SupporterItem[]) => void }) {
+  return <EditableSection title="Supporters" onAdd={() => onChange([...items, { name: "", amount: "" }])}>
+    {items.map((item, i) => (
+      <RowEditor key={i} index={i} count={items.length} onMove={(to) => onChange(moveItem(items, i, to))} onDelete={() => onChange(removeItem(items, i))}>
+        <input value={item.name} placeholder="Name" onChange={(e) => onChange(updateItem(items, i, { ...item, name: e.target.value }))} />
+        <input value={item.amount} placeholder="Amount" onChange={(e) => onChange(updateItem(items, i, { ...item, amount: e.target.value }))} />
+      </RowEditor>
+    ))}
+  </EditableSection>;
+}
+
+function EditableSection({ title, onAdd, children }: { title: string; onAdd?: () => void; children: ReactNode }) {
+  return (
+    <div className="editor-group">
+      <div className="row">
+        <h4>{title}</h4>
+        {onAdd && <button className="btn btn-ghost btn-sm" onClick={onAdd}>Add row</button>}
+      </div>
+      <div className="editor-grid">{children}</div>
+    </div>
+  );
+}
+
+function RowEditor({
+  index,
+  count,
+  onMove,
+  onDelete,
+  children,
+}: {
+  index: number;
+  count: number;
+  onMove?: (nextIndex: number) => void;
+  onDelete?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="panel editor-card">
+      {children}
+      <div className="row">
+        {onMove && <button className="btn btn-ghost btn-sm" onClick={() => onMove(index - 1)} disabled={index <= 0}>Up</button>}
+        {onMove && <button className="btn btn-ghost btn-sm" onClick={() => onMove(index + 1)} disabled={index >= count - 1}>Down</button>}
+        {onDelete && <button className="btn btn-ghost btn-sm" onClick={onDelete}>Delete</button>}
+      </div>
+    </div>
+  );
+}
+
+function updateStyle(draft: TemplateDraft, patch: Partial<Pick<TemplateDraft, "themeAccent" | "fontStyle" | "profileMark">>): TemplateDraft {
+  return { ...draft, ...patch } as TemplateDraft;
+}
+
+function updateItem<T>(items: T[], index: number, value: T): T[] {
+  return items.map((item, i) => (i === index ? value : item));
+}
+
+function removeItem<T>(items: T[], index: number): T[] {
+  return items.filter((_, i) => i !== index);
+}
+
+function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= items.length) return items;
+  const copy = [...items];
+  const [item] = copy.splice(from, 1);
+  copy.splice(to, 0, item);
+  return copy;
 }

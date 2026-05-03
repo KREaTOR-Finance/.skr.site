@@ -33,7 +33,7 @@ export interface TemplateCustomization {
   headline: string;
   subtext: string;
   accentColor: string;
-  emoji: string;
+  mark: string;
   links: TemplateLink[];
 }
 
@@ -41,7 +41,7 @@ export interface TemplateDefinition {
   id: string;
   title: string;
   description: string;
-  emoji: string;
+  mark: string;
   premium: boolean;
   screen: ScreenId;
   image: string;
