@@ -36,6 +36,31 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
     );
   }
 
+  if (result.status === "empty" && result.owner) {
+    return (
+      <main className="resolver-shell">
+        <div className="ambient ambient-a" />
+        <div className="ambient ambient-b" />
+        <section className="panel card-glow resolver-card">
+          <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
+          <span className="chip">Default profile</span>
+          <h1>{result.domain}</h1>
+          <p>This name is owned. A custom page has not been published yet, so this is the plain public profile.</p>
+          <div className="wallet-box">
+            <strong>Name</strong>
+            <span>{result.domain}</span>
+            <strong>Wallet</strong>
+            <span className="mono">{result.owner}</span>
+          </div>
+          <div className="row">
+            <Link className="btn btn-primary" href="/">Build a custom page</Link>
+            <Link className="btn btn-ghost" href="/reverse">Find another .skr</Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="resolver-shell">
       <div className="ambient ambient-a" />
