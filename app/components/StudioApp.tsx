@@ -12,7 +12,7 @@ import {
 import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds } from "@/app/lib/sharedSpec";
 import type { PublishResult, ScreenId, TemplateCustomization } from "@/app/lib/types";
 import { buildTemplateHtml, createContentUriAndHash } from "@/app/lib/publish";
-import { connectWallet, walletAddressShort, type BrowserWalletAdapter } from "@/app/lib/wallet";
+import { connectWallet, walletAddressShort, type BrowserWalletAdapter, type WalletProviderName } from "@/app/lib/wallet";
 import {
   createInitialTemplateDrafts,
   defaultDraftFor,
@@ -232,11 +232,11 @@ export default function StudioApp() {
     });
   }
 
-  async function handleConnect(provider: "Phantom" | "Backpack" | "Solflare") {
+  async function handleConnect(provider: WalletProviderName) {
     try {
       const connected = await connectWallet(provider);
       setWallet(connected);
-      setToast(`${provider} connected`);
+      setToast(`${connected.name} connected`);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Wallet connect failed");
     }
@@ -499,9 +499,10 @@ export default function StudioApp() {
         <section className="grid two">
           <article className="panel card-glow">
             <h2>Wallet Connect</h2>
-            <p>Connect your Solana wallet to buy templates and publish your .skr page.</p>
+            <p>Seed Vault via Solana Mobile MWA is the primary wallet. Desktop wallets stay available as fallback.</p>
             <div className="stack">
-              <button className="btn btn-primary" onClick={() => handleConnect("Phantom")}>Connect Phantom</button>
+              <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault")}>Connect Seed Vault (MWA)</button>
+              <button className="btn btn-ghost" onClick={() => handleConnect("Phantom")}>Connect Phantom</button>
               <button className="btn btn-ghost" onClick={() => handleConnect("Backpack")}>Connect Backpack</button>
               <button className="btn btn-ghost" onClick={() => handleConnect("Solflare")}>Connect Solflare</button>
             </div>

@@ -19,7 +19,7 @@ Set public chain values for the target network:
 ```bash
 NEXT_PUBLIC_SKR_PROGRAM_ID=<deployed_program_pubkey>
 NEXT_PUBLIC_SOLANA_CHAIN=mainnet
-NEXT_PUBLIC_SOLANA_RPC_URLS=https://api.mainnet-beta.solana.com
+NEXT_PUBLIC_SOLANA_RPC_URLS=https://api.mainnet-beta.solana.com,https://mainnet.helius-rpc.com/?api-key=<YOUR_HELIUS_API_KEY>
 NEXT_PUBLIC_SKR_MINT=<skr_mint_pubkey>
 NEXT_PUBLIC_SKR_TREASURY=<treasury_wallet_pubkey>
 ```

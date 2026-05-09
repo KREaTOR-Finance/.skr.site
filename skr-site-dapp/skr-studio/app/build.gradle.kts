@@ -30,7 +30,7 @@ android {
         val arweaveJwk = project.readConfig("ARWEAVE_JWK") ?: ""
         val pinataJwt = project.readConfig("PINATA_JWT") ?: ""
         val chainNetwork = project.readConfig("CHAIN_NETWORK") ?: "mainnet"
-        val rpcUrls = project.readConfig("SOLANA_RPC_URLS") ?: "https://api.mainnet-beta.solana.com,https://solana-mainnet.g.alchemy.com/v2/demo"
+        val rpcUrls = project.readConfig("SOLANA_RPC_URLS") ?: "https://api.mainnet-beta.solana.com,https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"
 
         buildConfigField("String", "STORAGE_PROVIDER", quoteForBuildConfig(storageProvider))
         buildConfigField("String", "UPLOAD_API_BASE_URL", quoteForBuildConfig(uploadApiBaseUrl))
@@ -105,9 +105,10 @@ dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.google.android.material:material:1.12.0")
 
-    implementation("com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.1.0")
-    implementation("com.solanamobile:mobile-wallet-adapter-common:2.1.0")
-    implementation("com.solanamobile:web3-solana-jvm:0.3.2-beta6")
+    implementation("com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.0.3")
+    implementation("com.solanamobile:web3-solana:0.2.5")
+    implementation("com.solanamobile:rpc-core:0.2.7")
+    implementation("io.github.funkatronics:multimult:0.2.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")

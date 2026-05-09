@@ -14,7 +14,7 @@ $env:RELEASE_KEY_PASSWORD="***"
 Optional chain config:
 ```powershell
 $env:CHAIN_NETWORK="mainnet"
-$env:SOLANA_RPC_URLS="https://api.mainnet-beta.solana.com,https://solana-mainnet.g.alchemy.com/v2/demo"
+$env:SOLANA_RPC_URLS="https://api.mainnet-beta.solana.com,https://mainnet.helius-rpc.com/?api-key=<YOUR_HELIUS_API_KEY>"
 ```
 
 ## 2) Validate signing config

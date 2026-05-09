@@ -150,7 +150,7 @@ class SolanaRpcClient(
         val defaults = when (network) {
             ChainNetwork.MAINNET -> listOf(
                 "https://api.mainnet-beta.solana.com",
-                "https://solana-mainnet.g.alchemy.com/v2/demo",
+                "https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY",
             )
             ChainNetwork.DEVNET -> listOf(
                 "https://api.devnet.solana.com",
