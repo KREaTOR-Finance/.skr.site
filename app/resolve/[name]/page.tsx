@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { resolveSkrDomain } from "@/app/lib/resolver";
+import SeekerIdCard from "@/app/components/SeekerIdCard";
+import { resolveSkrDomain, studioUrl } from "@/app/lib/resolver";
+import { loadSkrProfile } from "@/app/lib/skrProfile";
 
 export default async function ResolvePage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
@@ -8,7 +10,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
   const title = result.status === "published"
     ? `${result.domain} is live`
     : result.status === "empty"
-      ? `${result.domain} is waiting for its page`
+      ? result.domain
       : "This .skr needs a second look";
 
   if (result.status === "published" && result.url) {
@@ -22,7 +24,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
             <h1>{result.domain}</h1>
           </div>
           <div className="row">
-            <Link className="btn btn-ghost btn-sm" href="/">Open Studio</Link>
+            <a className="btn btn-ghost btn-sm" href={studioUrl(result.domain)}>Open Studio</a>
             <a className="btn btn-primary btn-sm" href={result.url} target="_blank" rel="noopener noreferrer">Open page</a>
           </div>
         </section>
@@ -37,26 +39,23 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
   }
 
   if (result.status === "empty" && result.owner) {
+    const profile = await loadSkrProfile(result.owner).catch(() => ({
+      wallet: result.owner!,
+      liquid: 0,
+      staked: 0,
+      yieldEarned: 0,
+      unstaking: 0,
+      total: 0,
+      guardian: null,
+      cooldownEndsAt: null,
+      isSeeker: false,
+      updatedAt: Date.now(),
+    }));
     return (
       <main className="resolver-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
-        <section className="panel card-glow resolver-card">
-          <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
-          <span className="chip">Default profile</span>
-          <h1>{result.domain}</h1>
-          <p>This name is owned. A custom page has not been published yet, so this is the plain public profile.</p>
-          <div className="wallet-box">
-            <strong>Name</strong>
-            <span>{result.domain}</span>
-            <strong>Wallet</strong>
-            <span className="mono">{result.owner}</span>
-          </div>
-          <div className="row">
-            <Link className="btn btn-primary" href="/">Build a custom page</Link>
-            <Link className="btn btn-ghost" href="/reverse">Find another .skr</Link>
-          </div>
-        </section>
+        <SeekerIdCard domain={result.domain} owner={result.owner} picture={result.picture} initial={profile} />
       </main>
     );
   }
@@ -69,14 +68,13 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
         <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
         <span className="chip">Find a .skr page</span>
         <h1>{title}</h1>
-        <p>{result.message ?? "This name is ready for a beautiful Seeker-native public page."}</p>
+        <p>{result.message ?? "This name is ready for a Seeker ID card."}</p>
         <div className="wallet-box">
           <strong>{result.domain}</strong>
-          {result.owner ? <span className="mono">{result.owner}</span> : <span>Not published yet</span>}
-          {result.template ? <small>Template: {result.template}</small> : <small>Create the first public page in Studio.</small>}
+          {result.owner ? <span className="mono">{result.owner}</span> : <span>Not claimed yet</span>}
         </div>
         <div className="row">
-          <Link className="btn btn-primary" href="/">Build this page</Link>
+          <a className="btn btn-primary" href={studioUrl(result.domain)}>Build this page</a>
           <Link className="btn btn-ghost" href="/reverse">Find a .skr by wallet</Link>
         </div>
       </section>

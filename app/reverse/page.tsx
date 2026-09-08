@@ -54,7 +54,7 @@ export default async function ReversePage({
               <>
                 <span className="chip">Default profile</span>
                 <h2>{nameResult.domain}</h2>
-                <p>This name is owned. A custom page has not been published yet, so we are showing the plain profile.</p>
+                <p>Open the Seeker ID card for this name.</p>
                 <div className="wallet-box">
                   <strong>Name</strong>
                   <span>{nameResult.domain}</span>

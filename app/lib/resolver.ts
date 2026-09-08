@@ -78,6 +78,13 @@ export function publicProfileUrl(domain: string): string {
   return `https://${domain.replace(/\.skr$/, "")}.skr.site`;
 }
 
+export const STUDIO_ORIGIN = "https://skr.site";
+
+export function studioUrl(domain?: string): string {
+  if (!domain) return STUDIO_ORIGIN;
+  return `${STUDIO_ORIGIN}/?domain=${encodeURIComponent(domain)}`;
+}
+
 async function readRecord(connection: Connection, domain: string, record: string): Promise<string | undefined> {
   const { pubkey } = await getDomainKey(`${record}.${domain}`, true);
   const accountInfo = await connection.getAccountInfo(pubkey, "confirmed");
@@ -126,7 +133,7 @@ export async function resolveSkrDomain(input: string): Promise<ForwardResolution
           ...normalized,
           owner: ownerRecord.owner.toBase58(),
           template: records.template,
-          message: "This .skr exists, but its public page is not published yet.",
+          picture: preferRecord(records, "pic", "Pic"),
         };
       }
 

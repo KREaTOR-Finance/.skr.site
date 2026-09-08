@@ -54,6 +54,9 @@ export function buildTemplateHtml(
   templateTitle: string,
   draft: TemplateDraft,
 ): string {
+  if ("customHtml" in draft && draft.customHtml?.trim()) {
+    return draft.customHtml;
+  }
   const safeDomain = escapeHtml(domain);
   const safeTemplateTitle = escapeHtml(templateTitle);
   const safeAccentColor = sanitizeCssColor(draft.themeAccent || "#00C9A7");
@@ -100,7 +103,9 @@ export function buildTemplateHtml(
 function renderTemplateSections(draft: TemplateDraft): string {
   switch (draft.templateId) {
     case "personal-bio":
-      return renderPersonalBio(draft);
+    case "studio":
+    case "bring-your-own":
+      return renderPersonalBio(draft as PersonalBioDraft);
     case "social-hub":
       return renderSocialHub(draft);
     case "shop":
@@ -115,6 +120,8 @@ function renderTemplateSections(draft: TemplateDraft): string {
       return renderDao(draft);
     case "link-in-bio":
       return renderLinkBio(draft);
+    default:
+      return "";
   }
 }
 

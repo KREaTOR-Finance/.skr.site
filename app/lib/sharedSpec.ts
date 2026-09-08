@@ -13,6 +13,15 @@ export const ANS_CREATE_DISCRIMINATOR_HEX = "181ec828051c0777";
 export const ANS_UPDATE_DISCRIMINATOR_HEX = "dbc858b09e3ffd7f";
 export const DEFAULT_RECORD_SPACE = 512;
 
+export const STUDIO_TEMPLATE_ID = "studio";
+export const STUDIO_ALIAS_IDS = ["studio", "bring-your-own"] as const;
+
+export const STUDIO_TINTS = [
+  { id: "teal", value: "#00C9A7", label: "Teal" },
+  { id: "violet", value: "#8B7CFF", label: "Violet" },
+  { id: "gold", value: "#D4AF37", label: "Gold" },
+] as const;
+
 export const BRAND = {
   bg: "#0A0A0A",
   teal: "#00C9A7",
@@ -23,16 +32,20 @@ export const BRAND = {
 };
 
 export const templates: TemplateDefinition[] = [
-  { id: "personal-bio", title: "Personal Bio", description: "Free default profile", mark: "P", premium: false, screen: "editor", image: "/seeker/13fac6c6-dfad-4c21-9719-9d36207341c5.jpg" },
-  { id: "social-hub", title: "Social Hub", description: "Community links and socials", mark: "S", premium: true, screen: "socialhub", image: "/seeker/23e396f4-d235-44aa-88d2-76a447661e92.jpg" },
-  { id: "shop", title: "Shop", description: "Sell goods priced in SKR", mark: "M", premium: true, screen: "shopstore", image: "/seeker/65d15055-54ce-4448-ae0c-81df21169c7b.jpg" },
-  { id: "calendar", title: "Calendar", description: "Events and RSVPs", mark: "C", premium: true, screen: "calendarevents", image: "/seeker/7bacfb70-390e-4020-8f6e-14b4476ab332.jpg" },
-  { id: "health", title: "Health & Fitness", description: "Metrics and streaks", mark: "F", premium: true, screen: "healthfitness", image: "/seeker/ae73a8c4-be73-4d6b-9d2c-c0c8853663d5.jpg" },
-  { id: "portfolio", title: "Creator Portfolio", description: "Gallery and media", mark: "A", premium: true, screen: "creatorportfolio", image: "/seeker/c1f20297-bc8f-432e-9109-52a156b33052.jpg" },
-  { id: "organization", title: "DAO Governance", description: "Votes, delegations, treasury", mark: "D", premium: true, screen: "daogovernance", image: "/seeker/cee457f5-fd04-4acd-bd4f-953053dcfaaf.jpg" },
-  { id: "link-in-bio", title: "Link-in-Bio", description: "Tip jars and stacked links", mark: "L", premium: true, screen: "linkbio", image: "/seeker/f45801fe-0371-44bb-9403-37968e647454.jpg" },
-  { id: "bring-your-own", title: "Bring Your Own", description: "Upload custom template package", mark: "B", premium: true, screen: "editor", image: "/seeker/image (1).jpg" },
+  {
+    id: STUDIO_TEMPLATE_ID,
+    title: "Studio",
+    description: "Theme your Seeker ID card or upload your own page",
+    mark: "S",
+    premium: true,
+    screen: "editor",
+    image: "/seeker/image (1).jpg",
+  },
 ];
 
 export const freeTemplateIds = templates.filter((t) => !t.premium).map((t) => t.id);
-export const premiumTemplateIds = templates.filter((t) => t.premium).map((t) => t.id);
+export const premiumTemplateIds = [...STUDIO_ALIAS_IDS];
+
+export function isStudioEntitlementId(templateId: string): boolean {
+  return (STUDIO_ALIAS_IDS as readonly string[]).includes(templateId);
+}

@@ -9,7 +9,7 @@ import {
   createDefaultWalletNotFoundHandler,
   registerMwa,
 } from "@solana-mobile/wallet-standard-mobile";
-import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds } from "@/app/lib/sharedSpec";
+import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds, STUDIO_TEMPLATE_ID, STUDIO_TINTS, isStudioEntitlementId } from "@/app/lib/sharedSpec";
 import type { PublishResult, ScreenId, TemplateCustomization } from "@/app/lib/types";
 import { buildTemplateHtml, createContentUriAndHash } from "@/app/lib/publish";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter, type WalletProviderName } from "@/app/lib/wallet";
@@ -36,6 +36,7 @@ import {
 } from "@/app/lib/templateDrafts";
 import {
   fetchTemplateEntitlementState,
+  fetchSkrProgramLive,
   preflightTemplatePurchase,
   signAndSendPublishTx,
   signAndSendPurchaseTx,
@@ -61,7 +62,7 @@ const screenTitle: Record<ScreenId, string> = {
   profile: "Profile",
   settings: "Settings",
   social: "Social",
-  templates: "Templates",
+  templates: "Studio",
   editor: "Editor",
   preview: "Preview",
   socialhub: "Social Hub",
@@ -99,16 +100,17 @@ function readJsonSafe<T>(key: string, fallback: T): T {
 }
 
 function isCoreScreen(screen: ScreenId): boolean {
-  return ["home", "templates", "wallet", "profile", "settings"].includes(screen);
+  return ["home", "templates", "wallet", "profile", "settings", "editor"].includes(screen);
 }
 
 export default function StudioApp() {
   const [screen, setScreen] = useState<ScreenId>("splash");
   const [history, setHistory] = useState<ScreenId[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("personal-bio");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(STUDIO_TEMPLATE_ID);
   const [customization, setCustomization] = useState<TemplateCustomization>(baseCustomization);
   const [wallet, setWallet] = useState<BrowserWalletAdapter | null>(null);
   const [walletUnlocked, setWalletUnlocked] = useState(false);
+  const [programLive, setProgramLive] = useState(false);
   const [ownedTemplateIds, setOwnedTemplateIds] = useState<string[]>([]);
   const [templateDrafts, setTemplateDrafts] = useState<Record<string, TemplateDraft>>(() => createInitialTemplateDrafts());
   const [chainSyncing, setChainSyncing] = useState(false);
@@ -141,7 +143,7 @@ export default function StudioApp() {
     [selectedTemplateId],
   );
 
-  const selectedTemplateOwned = !selectedTemplate.premium || ownedTemplateIds.includes(selectedTemplate.id);
+  const selectedTemplateOwned = !programLive || ownedTemplateIds.some(isStudioEntitlementId);
 
   const selectedTemplateDraft = useMemo(
     () => templateDrafts[selectedTemplate.id] ?? defaultDraftFor(selectedTemplate.id),
@@ -169,6 +171,13 @@ export default function StudioApp() {
     (async () => {
       setChainSyncing(true);
       try {
+        const live = await fetchSkrProgramLive({ rpcUrls: MAINNET_RPC_URLS });
+        if (cancelled) return;
+        setProgramLive(live);
+        if (!live) {
+          setWalletUnlocked(true);
+          return;
+        }
         const premiumStates = await Promise.all(
           premiumTemplateIds.map(async (templateId) => ({
             templateId,
@@ -196,6 +205,18 @@ export default function StudioApp() {
       cancelled = true;
     };
   }, [wallet]);
+
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("domain");
+    if (!raw) return;
+    const label = raw.replace(/\.skr$/i, "").toLowerCase();
+    if (!/^[a-z0-9-]{1,64}$/.test(label)) return;
+    setSelectedTemplateId(STUDIO_TEMPLATE_ID);
+    setTemplateDrafts((prev) => {
+      const current = (prev[STUDIO_TEMPLATE_ID] ?? defaultDraftFor(STUDIO_TEMPLATE_ID)) as Extract<TemplateDraft, { templateId: "studio" | "bring-your-own" | "personal-bio" }>;
+      return { ...prev, [STUDIO_TEMPLATE_ID]: { ...current, templateId: "studio", headline: label } };
+    });
+  }, []);
 
   useEffect(() => {
     if (!wallet) return;
@@ -258,11 +279,14 @@ export default function StudioApp() {
 
     setIsPublishing(true);
     try {
+      const publishTemplateId = ownedTemplateIds.includes("bring-your-own") && !ownedTemplateIds.includes(STUDIO_TEMPLATE_ID)
+        ? "bring-your-own"
+        : STUDIO_TEMPLATE_ID;
       const domain = `${selectedTemplateDraft.headline.toLowerCase().replace(/[^a-z0-9-]/g, "")}.skr`;
       const html = buildTemplateHtml(domain, selectedTemplate.title, selectedTemplateDraft);
       const { contentHash, contentUri, publicUrl, metadataRecords } = await createContentUriAndHash(html, {
         domain,
-        templateId: selectedTemplate.id,
+        templateId: publishTemplateId,
       });
 
       const signature = await signAndSendPublishTx({
@@ -270,10 +294,10 @@ export default function StudioApp() {
         wallet,
         payload: {
           domain,
-          templateId: selectedTemplate.id,
+          templateId: publishTemplateId,
           contentHash,
           contentUri,
-          isPremium: selectedTemplate.premium,
+          isPremium: true,
           metadata: {
             source: "skr-studio-v2",
             template: selectedTemplate.id,
@@ -446,7 +470,7 @@ export default function StudioApp() {
               <span className="chip">Seeker ready</span>
               <span className="chip">Wallet approved</span>
             </div>
-            <button className="btn btn-primary" onClick={() => nav("templates")}>Choose Template</button>
+            <button className="btn btn-primary" onClick={() => nav("editor")}>Open Studio</button>
           </article>
           <article className="panel">
             <Image src="/seeker/image (1).jpg" alt="Hero" width={420} height={560} className="cover" />
@@ -455,32 +479,25 @@ export default function StudioApp() {
       )}
 
       {screen === "templates" && (
-        <section className="template-grid">
-          {templates.map((template) => (
-            <button
-              key={template.id}
-              className={`template-card ${selectedTemplateId === template.id ? "selected" : ""}`}
-              onClick={() => {
-                setSelectedTemplateId(template.id);
-                goto(template.screen);
-              }}
-            >
-              <Image src={template.image} alt={template.title} width={320} height={240} className="cover" />
-              <div className="template-meta">
-                <strong><span className="template-mark">{template.mark}</span> {template.title}</strong>
-                <span>{template.description}</span>
-                {template.premium ? (
-                  ownedTemplateIds.includes(template.id) ? (
-                    <small>Premium · Owned</small>
-                  ) : (
-                    <small>Premium · {SKR_UNLOCK_AMOUNT_UI} SKR one-time</small>
-                  )
-                ) : (
-                  <small>Free</small>
-                )}
-              </div>
-            </button>
-          ))}
+        <section className="grid two">
+          <article className="panel card-glow">
+            <span className="chip">One unlock</span>
+            <h2>Studio</h2>
+            <p>1000 SKR once per wallet. Theme the Seeker ID card or paste your own HTML. Viewing any name.skr.site stays free.</p>
+            {!programLive ? (
+              <p>Payments live after the program is deployed to mainnet. You can still draft the page.</p>
+            ) : null}
+            {wallet && selectedTemplateOwned ? (
+              <button className="btn btn-primary" onClick={() => nav("editor")}>Customize</button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => handlePurchase(STUDIO_TEMPLATE_ID)} disabled={!wallet || isPurchasing || !programLive}>
+                {isPurchasing ? "Purchasing..." : `Unlock Studio (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
+              </button>
+            )}
+          </article>
+          <article className="panel">
+            <Image src="/seeker/image (1).jpg" alt="Studio" width={420} height={560} className="cover" />
+          </article>
         </section>
       )}
 
@@ -510,7 +527,7 @@ export default function StudioApp() {
               <div className="wallet-box">
                 <strong>{wallet.name}</strong>
                 <span>{walletAddressShort(wallet.publicKey.toBase58())}</span>
-                <small>{walletUnlocked ? "Premium templates ready" : "Premium templates locked"}</small>
+                <small>{!programLive ? "Payments live after program deploy" : walletUnlocked ? "Studio unlocked" : "Studio locked"}</small>
                 <small>{chainSyncing ? "Checking your access..." : "Access checked"}</small>
               </div>
             )}
@@ -530,7 +547,7 @@ export default function StudioApp() {
             <li>Template: {selectedTemplate.title}</li>
             <li>Premium access: {walletUnlocked ? "ready" : "locked"}</li>
           </ul>
-          <button className="btn btn-primary" onClick={() => nav("templates")}>Change Template</button>
+          <button className="btn btn-primary" onClick={() => nav("editor")}>Open Studio</button>
         </section>
       )}
 
@@ -603,7 +620,7 @@ export default function StudioApp() {
           )}
           <div className="row">
             <button className="btn btn-primary" onClick={() => nav("home")}>Go Home</button>
-            <button className="btn btn-ghost" onClick={() => nav("templates")}>Choose Another Template</button>
+            <button className="btn btn-ghost" onClick={() => nav("editor")}>Back to Studio</button>
           </div>
         </section>
       )}
@@ -611,7 +628,7 @@ export default function StudioApp() {
       {isCoreScreen(screen) && (
         <nav className="bottom-nav">
           <button className={screen === "home" ? "active" : ""} onClick={() => nav("home")}>Home</button>
-          <button className={screen === "templates" ? "active" : ""} onClick={() => nav("templates")}>Templates</button>
+          <button className={screen === "templates" || screen === "editor" ? "active" : ""} onClick={() => nav("editor")}>Studio</button>
           <button className={screen === "wallet" ? "active" : ""} onClick={() => nav("wallet")}>Wallet</button>
           <button className={screen === "profile" ? "active" : ""} onClick={() => nav("profile")}>Profile</button>
           <button className={screen === "settings" ? "active" : ""} onClick={() => nav("settings")}>Settings</button>
@@ -694,10 +711,10 @@ function TemplateRoutePanel({
 
       {locked ? (
         <article className="panel card-glow">
-          <h3>Unlock This Template</h3>
-          <p>Buy this premium template once to customize and publish it from your wallet.</p>
+          <h3>Unlock Studio</h3>
+          <p>Pay {SKR_UNLOCK_AMOUNT_UI} SKR once to theme the ID card or upload your own page.</p>
           <button className="btn btn-primary" onClick={onPurchase} disabled={isPurchasing}>
-            {isPurchasing ? "Purchasing..." : `Purchase Template (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
+            {isPurchasing ? "Purchasing..." : `Unlock Studio (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
           </button>
         </article>
       ) : (
@@ -856,22 +873,22 @@ function StyleControls({ draft, onDraftChange }: { draft: TemplateDraft; onDraft
   return (
     <article className="panel">
       <h3>Style</h3>
+      <div className="chip-row">
+        {STUDIO_TINTS.map((tint) => (
+          <button
+            key={tint.id}
+            type="button"
+            className={`chip ${draft.themeAccent.toLowerCase() === tint.value.toLowerCase() ? "active" : ""}`}
+            onClick={() => onDraftChange(updateStyle(draft, { themeAccent: tint.value }))}
+          >
+            {tint.label}
+          </button>
+        ))}
+      </div>
       <div className="row">
-        <label className="field compact">
-          Accent
-          <input type="color" value={draft.themeAccent} onChange={(e) => onDraftChange(updateStyle(draft, { themeAccent: e.target.value }))} />
-        </label>
         <label className="field compact">
           Profile mark
           <input value={draft.profileMark} onChange={(e) => onDraftChange(updateStyle(draft, { profileMark: e.target.value }))} />
-        </label>
-        <label className="field compact">
-          Font
-          <select value={draft.fontStyle} onChange={(e) => onDraftChange(updateStyle(draft, { fontStyle: e.target.value as TemplateDraft["fontStyle"] }))}>
-            <option>Default</option>
-            <option>Bold</option>
-            <option>Italic</option>
-          </select>
         </label>
       </div>
     </article>
@@ -906,9 +923,13 @@ function CommonFields({ draft, onDraftChange }: { draft: TemplateDraft; onDraftC
 function renderDraftFields(draft: TemplateDraft, onDraftChange: (draft: TemplateDraft) => void) {
   switch (draft.templateId) {
     case "personal-bio":
+    case "studio":
+    case "bring-your-own":
       return <>
-        <label className="field">About you<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
-        <EditableLinks title="Links" items={draft.links} onChange={(links) => onDraftChange({ ...draft, links })} />
+        <label className="field">Tagline<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
+        <label className="field">Photo URL<input value={draft.photoUrl ?? ""} onChange={(e) => onDraftChange({ ...draft, photoUrl: e.target.value })} /></label>
+        <EditableLinks title="Links (up to 5)" items={draft.links.slice(0, 5)} onChange={(links) => onDraftChange({ ...draft, links: links.slice(0, 5) })} />
+        <label className="field">Own HTML<textarea value={draft.customHtml ?? ""} onChange={(e) => onDraftChange({ ...draft, customHtml: e.target.value })} placeholder="Optional. Replaces the card body." /></label>
       </>;
     case "social-hub":
       return <>

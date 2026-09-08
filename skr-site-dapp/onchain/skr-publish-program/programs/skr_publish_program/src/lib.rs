@@ -292,21 +292,20 @@ pub struct PublishRecorded {
 }
 
 fn is_premium_template(template_id: &str) -> bool {
-    matches!(
-        template_id,
-        "social-hub"
-            | "shop"
-            | "calendar"
-            | "health"
-            | "portfolio"
-            | "organization"
-            | "link-in-bio"
-            | "bring-your-own"
-    )
+    matches!(template_id, "studio" | "bring-your-own")
+}
+
+fn template_family(template_id: &str) -> &str {
+    match template_id {
+        "studio" | "bring-your-own" => "studio",
+        other => other,
+    }
 }
 
 fn should_charge_rotation_fee(has_published: bool, previous_template: &str, new_template: &str) -> bool {
-    has_published && !previous_template.is_empty() && previous_template != new_template
+    has_published
+        && !previous_template.is_empty()
+        && template_family(previous_template) != template_family(new_template)
 }
 
 #[error_code]
@@ -336,15 +335,17 @@ mod tests {
     #[test]
     fn premium_template_map_is_correct() {
         assert!(!is_premium_template("personal-bio"));
-        assert!(is_premium_template("social-hub"));
+        assert!(!is_premium_template("social-hub"));
+        assert!(is_premium_template("studio"));
         assert!(is_premium_template("bring-your-own"));
     }
 
     #[test]
     fn rotation_fee_is_only_for_template_changes() {
-        assert!(!should_charge_rotation_fee(false, "", "social-hub"));
-        assert!(!should_charge_rotation_fee(true, "social-hub", "social-hub"));
-        assert!(should_charge_rotation_fee(true, "social-hub", "shop"));
+        assert!(!should_charge_rotation_fee(false, "", "studio"));
+        assert!(!should_charge_rotation_fee(true, "studio", "studio"));
+        assert!(!should_charge_rotation_fee(true, "studio", "bring-your-own"));
+        assert!(should_charge_rotation_fee(true, "studio", "personal-bio"));
     }
 
     #[test]

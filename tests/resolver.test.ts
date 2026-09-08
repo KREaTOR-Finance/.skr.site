@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractSkrLabelFromHost, normalizeSkrLabel } from "../app/lib/host";
-import { isSolanaPubkey, normalizeSkrDomain, publicProfileUrl } from "../app/lib/resolver";
+import { isSolanaPubkey, normalizeSkrDomain, publicProfileUrl, studioUrl } from "../app/lib/resolver";
 
 describe("wildcard host parsing", () => {
   it("extracts a .skr label from wildcard hostnames", () => {
@@ -34,5 +34,10 @@ describe(".skr input normalization", () => {
 
   it("builds the public wildcard URL", () => {
     expect(publicProfileUrl("thomas.skr")).toBe("https://thomas.skr.site");
+  });
+
+  it("points Build / Studio at the apex host", () => {
+    expect(studioUrl()).toBe("https://skr.site");
+    expect(studioUrl("moneysauce.skr")).toBe("https://skr.site/?domain=moneysauce.skr");
   });
 });

@@ -20,9 +20,11 @@ type DraftBase = {
 };
 
 export type PersonalBioDraft = DraftBase & {
-  templateId: "personal-bio";
+  templateId: "personal-bio" | "studio" | "bring-your-own";
   bio: string;
   links: LinkItem[];
+  photoUrl?: string;
+  customHtml?: string;
 };
 
 export type SocialHubDraft = DraftBase & {
@@ -259,19 +261,34 @@ export function defaultDraftFor(templateId: string): TemplateDraft {
           { label: "Clicks", value: "5,628" },
         ],
       };
-    default:
+    case "studio":
+    case "bring-your-own":
       return {
-        templateId: "personal-bio",
-        headline: "nakamura.skr",
-        subtext: "Builder - Artist - Seeker",
+        templateId: templateId === "bring-your-own" ? "bring-your-own" : "studio",
+        headline: "moneysauce",
+        subtext: "Seeker ID",
         themeAccent: "#00C9A7",
         fontStyle: "Default",
-        profileMark: "P",
-        bio: "Building on Solana. Creating with pixels. Living on-chain.",
+        profileMark: "S",
+        bio: "",
+        photoUrl: "",
+        customHtml: "",
         links: [
-          { label: "X", url: "https://x.com/nakamura_sol" },
-          { label: "GitHub", url: "https://github.com/nakamura" },
+          { label: "X", url: "" },
         ],
+      };
+    default:
+      return {
+        templateId: "studio",
+        headline: "moneysauce",
+        subtext: "Seeker ID",
+        themeAccent: "#00C9A7",
+        fontStyle: "Default",
+        profileMark: "S",
+        bio: "",
+        photoUrl: "",
+        customHtml: "",
+        links: [{ label: "X", url: "" }],
       };
   }
 }
@@ -286,12 +303,19 @@ export function createInitialTemplateDrafts(): Record<string, TemplateDraft> {
 
 export function validateDraft(draft: TemplateDraft): string[] {
   const errors: string[] = [];
-  if (!draft.headline.trim()) errors.push("Add a page title");
+  if (!draft.headline.trim()) errors.push("Add your .skr name");
+  if (draft.templateId === "studio" || draft.templateId === "bring-your-own") {
+    if (draft.links.length > 5) errors.push("Keep it to 5 links");
+    return errors;
+  }
   if (!draft.subtext.trim()) errors.push("Add a short intro");
   switch (draft.templateId) {
     case "personal-bio":
-      if (!draft.bio.trim()) errors.push("Add your bio");
-      if (!draft.links.some((item) => item.label.trim() && item.url.trim())) errors.push("Add at least one link");
+      if (draft.customHtml?.trim()) break;
+      if (!draft.bio.trim() && !draft.links.some((item) => item.label.trim() && item.url.trim())) {
+        errors.push("Add a short bio, up to 5 links, or your own HTML");
+      }
+      if (draft.links.length > 5) errors.push("Keep it to 5 links");
       break;
     case "social-hub":
       if (!draft.socialLinks.some((item) => item.label.trim())) errors.push("Add at least one social link");
@@ -322,20 +346,22 @@ export function validateDraft(draft: TemplateDraft): string[] {
 export function draftSummary(draft: TemplateDraft): DraftSummary {
   switch (draft.templateId) {
     case "personal-bio":
+    case "studio":
+    case "bring-your-own":
       return {
         title: draft.headline,
         subtitle: draft.subtext,
-        badge: "Personal page",
+        badge: "Seeker ID Studio",
         stats: [
-          { label: "Links", value: String(draft.links.length) },
-          { label: "Profile", value: "Live-ready" },
-          { label: "Theme", value: draft.profileMark },
+          { label: "Links", value: String(draft.links.filter((item) => item.label.trim()).length) },
+          { label: "HTML", value: draft.customHtml?.trim() ? "Custom" : "Card" },
+          { label: "Theme", value: draft.themeAccent },
         ],
         modules: [
-          { title: "About section", desc: draft.bio },
-          { title: "Social links", desc: draft.links.map((item) => item.label).join(", ") },
+          { title: "Bio", desc: draft.bio || "Optional tagline under the name" },
+          { title: "Links", desc: draft.links.map((item) => item.label).filter(Boolean).join(", ") || "Up to 5" },
         ],
-        cta: "Publish profile",
+        cta: "Publish page",
       };
     case "social-hub":
       return {

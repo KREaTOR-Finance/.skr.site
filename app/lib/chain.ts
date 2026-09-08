@@ -514,6 +514,21 @@ function parseTemplateEntitlementAccount(data: Buffer): TemplateEntitlementState
   };
 }
 
+export async function fetchSkrProgramLive(params: {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+}): Promise<boolean> {
+  try {
+    const programId = readProgramId();
+    return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
+      const info = await connection.getAccountInfo(programId, "confirmed");
+      return Boolean(info?.executable);
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchTemplateEntitlementState(params: {
   rpcUrl?: string;
   rpcUrls?: string[];

@@ -34,7 +34,7 @@ describe("record entry builder", () => {
   it("always writes url + template and includes optional metadata", () => {
     const payload: PublishPayload = {
       domain: "thomas.skr",
-      templateId: "social-hub",
+      templateId: "studio",
       contentUri: "ar://abc",
       contentHash: "a".repeat(64),
       isPremium: true,
@@ -48,7 +48,7 @@ describe("record entry builder", () => {
 
     expect(buildRecordEntries(payload)).toEqual([
       { record: "url", value: "https://arweave.net/abc" },
-      { record: "template", value: "social-hub" },
+      { record: "template", value: "studio" },
       { record: "ARWV", value: "abc" },
       { record: "IPFS", value: "Qm123" },
       { record: "pic", value: "https://arweave.net/pic" },
