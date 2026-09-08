@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { normalizeSkrDomain, resolveSkrDomain, reverseResolveWallet } from "@/app/lib/resolver";
+import { isSolanaPubkey, normalizeSkrDomain, resolveSkrDomain, reverseResolveWallet } from "@/app/lib/resolver";
 
 export default async function ReversePage({
   searchParams,
@@ -9,9 +9,10 @@ export default async function ReversePage({
 }) {
   const { wallet = "" } = await searchParams;
   const query = wallet.trim();
-  const nameQuery = query ? normalizeSkrDomain(query) : null;
+  const looksLikeWallet = query ? isSolanaPubkey(query) : false;
+  const nameQuery = query && !looksLikeWallet ? normalizeSkrDomain(query) : null;
   const nameResult = nameQuery ? await resolveSkrDomain(query) : null;
-  const result = query && !nameQuery ? await reverseResolveWallet(query) : null;
+  const result = query && (looksLikeWallet || !nameQuery) ? await reverseResolveWallet(query) : null;
 
   return (
     <main className="resolver-shell">

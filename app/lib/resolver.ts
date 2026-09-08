@@ -56,7 +56,19 @@ function trimRecordValue(data?: Buffer): string | undefined {
   return value || undefined;
 }
 
+export function isSolanaPubkey(input: string): boolean {
+  const value = input.trim();
+  if (!value) return false;
+  try {
+    const key = new PublicKey(value);
+    return key.toBase58() === value || key.toBase58().toLowerCase() === value.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeSkrDomain(input: string): { label: string; domain: string } | null {
+  if (isSolanaPubkey(input)) return null;
   const label = normalizeSkrLabel(input);
   if (!label) return null;
   return { label, domain: `${label}.skr` };
@@ -154,8 +166,13 @@ export async function reverseResolveWallet(input: string): Promise<ReverseResolu
   try {
     return await withRpc(async (connection) => {
       const parser = new TldParser(connection);
-      const allDomains = await parser.getParsedAllUserDomainsFromTld(wallet, "skr").catch(() => []);
-      const domains = allDomains.map((entry) => entry.domain).filter((domain) => domain.endsWith(".skr"));
+      const fromTld = await parser.getParsedAllUserDomainsFromTld(wallet, "skr").catch(() => []);
+      const allDomains = fromTld.length
+        ? fromTld
+        : await parser.getParsedAllUserDomains(wallet).catch(() => []);
+      const domains = [...new Set(
+        allDomains.map((entry) => entry.domain).filter((domain) => domain.endsWith(".skr")),
+      )].sort();
 
       let primary = domains[0];
       try {

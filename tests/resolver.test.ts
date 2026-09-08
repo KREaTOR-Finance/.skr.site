@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractSkrLabelFromHost, normalizeSkrLabel } from "../app/lib/host";
-import { normalizeSkrDomain, publicProfileUrl } from "../app/lib/resolver";
+import { isSolanaPubkey, normalizeSkrDomain, publicProfileUrl } from "../app/lib/resolver";
 
 describe("wildcard host parsing", () => {
   it("extracts a .skr label from wildcard hostnames", () => {
@@ -24,6 +24,12 @@ describe(".skr input normalization", () => {
   it("rejects names that cannot be routed safely", () => {
     expect(normalizeSkrLabel("../nope")).toBeNull();
     expect(normalizeSkrDomain("bad name.skr")).toBeNull();
+  });
+
+  it("does not treat a Solana wallet as a .skr name", () => {
+    const wallet = "7NQnWRziGPj3XWRwyEZzqqfYhvPZjCHBtJ3g96QQXbDH";
+    expect(isSolanaPubkey(wallet)).toBe(true);
+    expect(normalizeSkrDomain(wallet)).toBeNull();
   });
 
   it("builds the public wildcard URL", () => {
