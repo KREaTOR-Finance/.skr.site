@@ -292,7 +292,7 @@ pub struct PublishRecorded {
 }
 
 fn is_premium_template(template_id: &str) -> bool {
-    matches!(template_id, "studio" | "bring-your-own")
+    matches!(template_id, "bring-your-own")
 }
 
 fn template_family(template_id: &str) -> &str {
@@ -336,7 +336,7 @@ mod tests {
     fn premium_template_map_is_correct() {
         assert!(!is_premium_template("personal-bio"));
         assert!(!is_premium_template("social-hub"));
-        assert!(is_premium_template("studio"));
+        assert!(!is_premium_template("studio"));
         assert!(is_premium_template("bring-your-own"));
     }
 

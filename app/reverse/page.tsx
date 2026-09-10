@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import SiteHeader from "@/app/components/SiteHeader";
 import { isSolanaPubkey, normalizeSkrDomain, resolveSkrDomain, reverseResolveWallet } from "@/app/lib/resolver";
 
 export default async function ReversePage({
@@ -18,6 +19,7 @@ export default async function ReversePage({
     <main className="resolver-shell">
       <div className="ambient ambient-a" />
       <div className="ambient ambient-b" />
+      <SiteHeader />
 
       <section className="panel card-glow resolver-card">
         <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={78} height={78} className="hero-logo brand-logo" />
@@ -52,7 +54,7 @@ export default async function ReversePage({
               </>
             ) : nameResult.status === "empty" && nameResult.owner ? (
               <>
-                <span className="chip">Default profile</span>
+                <span className="chip">Seeker ID</span>
                 <h2>{nameResult.domain}</h2>
                 <p>Open the Seeker ID card for this name.</p>
                 <div className="wallet-box">
@@ -62,7 +64,7 @@ export default async function ReversePage({
                   <span className="mono">{nameResult.owner}</span>
                 </div>
                 <div className="row">
-                  <Link className="btn btn-primary" href={`/resolve/${nameResult.label}`}>Open default profile</Link>
+                  <Link className="btn btn-primary" href={`/resolve/${nameResult.label}`}>Open Seeker ID</Link>
                   <Link className="btn btn-ghost" href="/reverse">Search again</Link>
                 </div>
               </>
@@ -100,7 +102,7 @@ export default async function ReversePage({
             ) : (
               <>
                 <span className="chip">No match yet</span>
-                <h2>Nothing published for this wallet</h2>
+                <h2>No .skr name was found for this wallet yet</h2>
                 <p>{result.message}</p>
                 <div className="row">
                   <Link className="btn btn-primary" href="/">Create a .skr page</Link>

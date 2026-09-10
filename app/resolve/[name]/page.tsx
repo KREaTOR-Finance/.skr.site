@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import SeekerIdCard from "@/app/components/SeekerIdCard";
+import SiteHeader from "@/app/components/SiteHeader";
 import { resolveSkrDomain, studioUrl } from "@/app/lib/resolver";
 import { loadSkrProfile } from "@/app/lib/skrProfile";
 
@@ -18,6 +19,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
       <main className="resolver-shell resolver-frame-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
+        <SiteHeader />
         <section className="resolver-toolbar">
           <div>
             <span className="chip">Live .skr page</span>
@@ -50,11 +52,13 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
       cooldownEndsAt: null,
       isSeeker: false,
       updatedAt: Date.now(),
+      unavailable: true,
     }));
     return (
       <main className="resolver-shell">
         <div className="ambient ambient-a" />
         <div className="ambient ambient-b" />
+        <SiteHeader />
         <SeekerIdCard domain={result.domain} owner={result.owner} picture={result.picture} initial={profile} />
       </main>
     );
@@ -64,8 +68,9 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
     <main className="resolver-shell">
       <div className="ambient ambient-a" />
       <div className="ambient ambient-b" />
+      <SiteHeader />
       <section className="panel card-glow resolver-card">
-        <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
+      <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={86} height={86} className="hero-logo brand-logo" />
         <span className="chip">Find a .skr page</span>
         <h1>{title}</h1>
         <p>{result.message ?? "This name is ready for a Seeker ID card."}</p>

@@ -9,7 +9,7 @@ import {
   createDefaultWalletNotFoundHandler,
   registerMwa,
 } from "@solana-mobile/wallet-standard-mobile";
-import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds, STUDIO_TEMPLATE_ID, STUDIO_TINTS, isStudioEntitlementId } from "@/app/lib/sharedSpec";
+import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds, STUDIO_TEMPLATE_ID, HTML_TEMPLATE_ID, STUDIO_TINTS, isHtmlEntitlementId } from "@/app/lib/sharedSpec";
 import type { PublishResult, ScreenId, TemplateCustomization } from "@/app/lib/types";
 import { buildTemplateHtml, createContentUriAndHash } from "@/app/lib/publish";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter, type WalletProviderName } from "@/app/lib/wallet";
@@ -44,14 +44,11 @@ import {
 } from "@/app/lib/chain";
 
 const baseCustomization: TemplateCustomization = {
-  headline: "Thomas",
-  subtext: "Builder on Solana · Seeker",
+  headline: "",
+  subtext: "Seeker ID",
   accentColor: "#00C9A7",
   mark: "SKR",
-  links: [
-    { label: "X", url: "https://x.com" },
-    { label: "Discord", url: "https://discord.com" },
-  ],
+  links: [],
 };
 
 const screenTitle: Record<ScreenId, string> = {
@@ -75,7 +72,7 @@ const screenTitle: Record<ScreenId, string> = {
   publish: "Publish",
 };
 
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const TEMPLATE_INPUTS_KEY = `skr:template-drafts:v${STORAGE_VERSION}`;
 const PURCHASES_KEY = `skr:purchases:v${STORAGE_VERSION}`;
 const MAINNET_RPC_URLS = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "https://api.mainnet-beta.solana.com")
@@ -143,7 +140,8 @@ export default function StudioApp() {
     [selectedTemplateId],
   );
 
-  const selectedTemplateOwned = !programLive || ownedTemplateIds.some(isStudioEntitlementId);
+  const selectedTemplateOwned = true;
+  const htmlOwned = !programLive || ownedTemplateIds.some(isHtmlEntitlementId);
 
   const selectedTemplateDraft = useMemo(
     () => templateDrafts[selectedTemplate.id] ?? defaultDraftFor(selectedTemplate.id),
@@ -272,6 +270,11 @@ export default function StudioApp() {
       setToast("Purchase this template before publishing");
       return;
     }
+    const usingHtml = Boolean((selectedTemplateDraft as { customHtml?: string }).customHtml?.trim());
+    if (usingHtml && !htmlOwned) {
+      setToast("Unlock custom HTML before publishing it");
+      return;
+    }
     if (selectedTemplateErrors.length > 0) {
       setToast("Finish the required fields before publishing");
       return;
@@ -279,9 +282,7 @@ export default function StudioApp() {
 
     setIsPublishing(true);
     try {
-      const publishTemplateId = ownedTemplateIds.includes("bring-your-own") && !ownedTemplateIds.includes(STUDIO_TEMPLATE_ID)
-        ? "bring-your-own"
-        : STUDIO_TEMPLATE_ID;
+      const publishTemplateId = usingHtml ? HTML_TEMPLATE_ID : STUDIO_TEMPLATE_ID;
       const domain = `${selectedTemplateDraft.headline.toLowerCase().replace(/[^a-z0-9-]/g, "")}.skr`;
       const html = buildTemplateHtml(domain, selectedTemplate.title, selectedTemplateDraft);
       const { contentHash, contentUri, publicUrl, metadataRecords } = await createContentUriAndHash(html, {
@@ -297,7 +298,7 @@ export default function StudioApp() {
           templateId: publishTemplateId,
           contentHash,
           contentUri,
-          isPremium: true,
+          isPremium: usingHtml,
           metadata: {
             source: "skr-studio-v2",
             template: selectedTemplate.id,
@@ -318,17 +319,16 @@ export default function StudioApp() {
   }
 
   async function handlePurchase(templateId: string) {
-    const template = templates.find((t) => t.id === templateId);
-    if (!template || !template.premium) {
-      setToast("This template is free");
+    if (!isHtmlEntitlementId(templateId)) {
+      setToast("Card theme is free");
       return;
     }
     if (!wallet) {
-      setToast("Connect wallet to purchase template");
+      setToast(`Connect wallet to unlock custom HTML`);
       return;
     }
     if (ownedTemplateIds.includes(templateId)) {
-      setToast("Template already purchased");
+      setToast("Custom HTML already unlocked");
       return;
     }
     if (isPurchasing) return;
@@ -372,7 +372,7 @@ export default function StudioApp() {
         setWalletUnlocked(true);
         setOwnedTemplateIds((ids) => Array.from(new Set([...ids, templateId])));
       }
-      setToast(`${template.title} unlocked for ${SKR_UNLOCK_AMOUNT_UI} SKR. Confirmation: ${signature.slice(0, 8)}...`);
+      setToast(`Custom HTML unlocked for ${SKR_UNLOCK_AMOUNT_UI} SKR. Confirmation: ${signature.slice(0, 8)}...`);
     } catch (error) {
       setToast(toUserFacingChainError(error));
     } finally {
@@ -388,37 +388,15 @@ export default function StudioApp() {
     <TemplateRoutePanel
       template={selectedTemplate}
       draft={selectedTemplateDraft}
-      locked={Boolean(selectedTemplate.premium && !selectedTemplateOwned)}
+      locked={false}
+      htmlLocked={!htmlOwned}
       errors={selectedTemplateErrors}
       isPurchasing={isPurchasing}
-      onPurchase={() => handlePurchase(selectedTemplate.id)}
+      onPurchase={() => handlePurchase(HTML_TEMPLATE_ID)}
       onDraftChange={updateTemplateDraft}
       onContinue={() => goto("publish")}
     />
   );
-
-  function renderTemplatePanel(templateId: string) {
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) return null;
-    const draft = templateDrafts[templateId] ?? defaultDraftFor(templateId);
-    const errors = validateDraft(draft);
-    const locked = Boolean(template.premium && !ownedTemplateIds.includes(template.id));
-    return (
-      <TemplateRoutePanel
-        template={template}
-        draft={draft}
-        locked={locked}
-        errors={errors}
-        isPurchasing={isPurchasing}
-        onPurchase={() => handlePurchase(template.id)}
-        onDraftChange={updateTemplateDraft}
-        onContinue={() => {
-          setSelectedTemplateId(template.id);
-          goto("publish");
-        }}
-      />
-    );
-  }
 
   return (
     <main className="studio-shell">
@@ -441,7 +419,7 @@ export default function StudioApp() {
           <h2><span className="shimmer-text">.skr</span> Studio</h2>
           <p>Your Solana identity, beautifully packaged for Seeker.</p>
           <div className="welcome-actions">
-            <button className="btn btn-primary" onClick={() => nav("home")}>Start building</button>
+            <button className="btn btn-primary" onClick={() => nav("home")}>Open Studio</button>
             <a className="btn btn-ghost" href="/reverse">Find a .skr</a>
           </div>
         </section>
@@ -455,7 +433,7 @@ export default function StudioApp() {
           <article className="panel card-glow">
             <h2>Built for Seeker</h2>
             <p>Black glass, teal glow, chrome details, and mobile-first pages that feel at home on your device.</p>
-            <button className="btn btn-primary" onClick={() => nav("home")}>Start building</button>
+            <button className="btn btn-primary" onClick={() => nav("home")}>Open Studio</button>
           </article>
         </section>
       )}
@@ -463,12 +441,11 @@ export default function StudioApp() {
       {screen === "home" && (
         <section className="grid two">
           <article className="panel card-glow">
-            <h2>{selectedTemplateDraft.headline}<span className="shimmer-text">.skr</span></h2>
-            <p>{selectedTemplateDraft.subtext}</p>
+            <h2>{selectedTemplateDraft.headline.trim() || "your"}<span className="shimmer-text">.skr</span></h2>
+            <p>{selectedTemplateDraft.subtext.trim() || "Seeker ID"}</p>
             <div className="chip-row">
               <span className="chip">Solana</span>
-              <span className="chip">Seeker ready</span>
-              <span className="chip">Wallet approved</span>
+              <span className="chip">Seeker</span>
             </div>
             <button className="btn btn-primary" onClick={() => nav("editor")}>Open Studio</button>
           </article>
@@ -481,34 +458,19 @@ export default function StudioApp() {
       {screen === "templates" && (
         <section className="grid two">
           <article className="panel card-glow">
-            <span className="chip">One unlock</span>
+            <span className="chip">Free card</span>
             <h2>Studio</h2>
-            <p>1000 SKR once per wallet. Theme the Seeker ID card or paste your own HTML. Viewing any name.skr.site stays free.</p>
+            <p>Theme the Seeker ID card for free. Custom HTML is the only paid option ({SKR_UNLOCK_AMOUNT_UI} SKR once). Viewing any name.skr.site stays free.</p>
             {!programLive ? (
-              <p>Payments live after the program is deployed to mainnet. You can still draft the page.</p>
+              <p>HTML payments live after the program is deployed to mainnet. You can still draft the card.</p>
             ) : null}
-            {wallet && selectedTemplateOwned ? (
-              <button className="btn btn-primary" onClick={() => nav("editor")}>Customize</button>
-            ) : (
-              <button className="btn btn-primary" onClick={() => handlePurchase(STUDIO_TEMPLATE_ID)} disabled={!wallet || isPurchasing || !programLive}>
-                {isPurchasing ? "Purchasing..." : `Unlock Studio (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
-              </button>
-            )}
+            <button className="btn btn-primary" onClick={() => nav("editor")}>Customize</button>
           </article>
           <article className="panel">
             <Image src="/seeker/image (1).jpg" alt="Studio" width={420} height={560} className="cover" />
           </article>
         </section>
       )}
-
-      {screen === "socialhub" && renderTemplatePanel("social-hub")}
-      {screen === "shopstore" && renderTemplatePanel("shop")}
-      {screen === "creatorportfolio" && renderTemplatePanel("portfolio")}
-      {screen === "calendarevents" && renderTemplatePanel("calendar")}
-      {screen === "healthfitness" && renderTemplatePanel("health")}
-      {screen === "daogovernance" && renderTemplatePanel("organization")}
-      {screen === "linkbio" && renderTemplatePanel("link-in-bio")}
-      {screen === "social" && renderTemplatePanel("social-hub")}
 
       {screen === "editor" && editorPanel}
 
@@ -527,7 +489,7 @@ export default function StudioApp() {
               <div className="wallet-box">
                 <strong>{wallet.name}</strong>
                 <span>{walletAddressShort(wallet.publicKey.toBase58())}</span>
-                <small>{!programLive ? "Payments live after program deploy" : walletUnlocked ? "Studio unlocked" : "Studio locked"}</small>
+                <small>{!programLive ? "HTML payments live after program deploy" : htmlOwned ? "Custom HTML unlocked" : "Card theme free · HTML locked"}</small>
                 <small>{chainSyncing ? "Checking your access..." : "Access checked"}</small>
               </div>
             )}
@@ -541,11 +503,11 @@ export default function StudioApp() {
       {screen === "profile" && (
         <section className="panel card-glow">
           <h2>Creator Profile</h2>
-          <p>Choose a template, personalize it, and publish a public page for your .skr name.</p>
+          <p>Theme your Seeker ID card, then publish it for your .skr name.</p>
           <ul className="bullets">
             <li>Domain: {selectedTemplateDraft.headline.toLowerCase()}.skr</li>
-            <li>Template: {selectedTemplate.title}</li>
-            <li>Premium access: {walletUnlocked ? "ready" : "locked"}</li>
+            <li>Card theme: free</li>
+            <li>Custom HTML: {htmlOwned ? "unlocked" : "locked"}</li>
           </ul>
           <button className="btn btn-primary" onClick={() => nav("editor")}>Open Studio</button>
         </section>
@@ -575,16 +537,16 @@ export default function StudioApp() {
           </div>
           <h2>Publish Your Page</h2>
           <p>
-            {selectedTemplate.premium
-              ? selectedTemplateOwned
-                ? `This update is ready. You will approve a small ${TEMPLATE_CHANGE_FEE_SOL} SOL update fee plus network fees.`
-                : `Buy this template first for ${SKR_UNLOCK_AMOUNT_UI} SKR.`
-              : "This free template is ready to publish."}
+            {(selectedTemplateDraft as { customHtml?: string }).customHtml?.trim()
+              ? htmlOwned
+                ? `Custom HTML is ready. You will approve a small ${TEMPLATE_CHANGE_FEE_SOL} SOL update fee plus network fees.`
+                : `Unlock custom HTML first (${SKR_UNLOCK_AMOUNT_UI} SKR).`
+              : "Your Seeker ID card theme is free to publish."}
           </p>
           <div className="wallet-box">
-            <span>Template: {selectedTemplate.title}</span>
+            <span>Page: Seeker ID card</span>
             <span>Wallet: {wallet ? walletAddressShort(wallet.publicKey.toBase58()) : "Not connected"}</span>
-            <span>Premium status: {selectedTemplateOwned ? "Unlocked" : "Locked"}</span>
+            <span>Custom HTML: {htmlOwned ? "Unlocked" : "Locked"}</span>
           </div>
           {selectedTemplateErrors.length > 0 && (
             <div className="panel locked-panel">
@@ -594,7 +556,7 @@ export default function StudioApp() {
               </ul>
             </div>
           )}
-          <button className="btn btn-primary" onClick={handlePublish} disabled={isPublishing || selectedTemplateErrors.length > 0 || (selectedTemplate.premium && !selectedTemplateOwned)}>
+          <button className="btn btn-primary" onClick={handlePublish} disabled={isPublishing || selectedTemplateErrors.length > 0 || (Boolean((selectedTemplateDraft as { customHtml?: string }).customHtml?.trim()) && !htmlOwned)}>
             {isPublishing ? "Publishing..." : "Review in Wallet"}
           </button>
           <button className="btn btn-ghost" onClick={() => goto("editor")}>Back to Editor</button>
@@ -631,7 +593,7 @@ export default function StudioApp() {
           <button className={screen === "templates" || screen === "editor" ? "active" : ""} onClick={() => nav("editor")}>Studio</button>
           <button className={screen === "wallet" ? "active" : ""} onClick={() => nav("wallet")}>Wallet</button>
           <button className={screen === "profile" ? "active" : ""} onClick={() => nav("profile")}>Profile</button>
-          <button className={screen === "settings" ? "active" : ""} onClick={() => nav("settings")}>Settings</button>
+          <a href="https://skr.site/reverse">Find</a>
         </nav>
       )}
 
@@ -640,10 +602,38 @@ export default function StudioApp() {
   );
 }
 
+function StudioCardPreview({ draft }: { draft: TemplateDraft }) {
+  const photo = "photoUrl" in draft ? draft.photoUrl : "";
+  const links = "links" in draft ? draft.links.filter((item) => item.label.trim()) : [];
+  const html = "customHtml" in draft ? draft.customHtml?.trim() : "";
+  return (
+    <article className="panel card-glow seeker-id-card" style={{ borderColor: draft.themeAccent }}>
+      <span className="chip">Preview</span>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="seeker-id-avatar" src={photo} alt="" />
+      ) : (
+        <div className="seeker-id-knot" aria-hidden="true" />
+      )}
+      <h2>{draft.headline || "your"}.skr</h2>
+      <p>{draft.subtext || ("bio" in draft ? draft.bio : "") || "Seeker ID"}</p>
+      {links.length ? (
+        <div className="chip-row">
+          {links.slice(0, 5).map((item) => (
+            <span className="chip" key={`${item.label}-${item.url}`}>{item.label}</span>
+          ))}
+        </div>
+      ) : null}
+      {html ? <small className="seeker-id-updated">Custom HTML will replace this card</small> : <small className="seeker-id-updated">Live card theme</small>}
+    </article>
+  );
+}
+
 function TemplateRoutePanel({
   template,
   draft,
   locked,
+  htmlLocked,
   errors,
   isPurchasing,
   onPurchase,
@@ -653,6 +643,7 @@ function TemplateRoutePanel({
   template: (typeof templates)[number];
   draft: TemplateDraft;
   locked: boolean;
+  htmlLocked: boolean;
   errors: string[];
   isPurchasing: boolean;
   onPurchase: () => Promise<void> | void;
@@ -660,80 +651,79 @@ function TemplateRoutePanel({
   onContinue: () => void;
 }) {
   const display = draftSummary(draft);
+  const isCardStudio = draft.templateId === "studio" || draft.templateId === "bring-your-own" || draft.templateId === "personal-bio";
+  void locked;
   return (
     <section className="mock-shell">
-      <article className="panel card-glow mock-hero">
-        <Image src={template.image} alt={template.title} width={480} height={300} className="cover mock-cover" />
-        <div className="mock-overlay" />
-        <div className="mock-content">
-          <div className="chip">{display.badge}</div>
-          <h2>{display.title}</h2>
-          <p>{display.subtitle}</p>
-        </div>
-      </article>
-
-      <div className="mock-stats">
-        {display.stats.map((s, idx) => (
-          <article key={s.label} className="panel">
-            <div className="mock-stat-value">{s.value}</div>
-            <div className="mock-stat-label">{s.label || `Stat ${idx + 1}`}</div>
-          </article>
-        ))}
-      </div>
-
-      <article className="panel">
-        <h3>What This Page Shows</h3>
-        <div className="mock-module-list">
-          {display.modules.map((m) => (
-            <div key={m.title} className="mock-module">
-              <div>
-                <strong>{m.title}</strong>
-                <p>{m.desc}</p>
-              </div>
-              <span className="chip">Included</span>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      <DraftLiveModules draft={draft} />
-
-      <article className="panel">
-        <h3>Activity Snapshot</h3>
-        <div className="mock-bars">
-          {[74, 88, 61, 93, 79, 68, 96].map((v, idx) => (
-            <div key={idx} className="mock-bar-wrap">
-              <div className="mock-bar" style={{ height: `${v}%` }} />
-            </div>
-          ))}
-        </div>
-      </article>
-
-      {locked ? (
-        <article className="panel card-glow">
-          <h3>Unlock Studio</h3>
-          <p>Pay {SKR_UNLOCK_AMOUNT_UI} SKR once to theme the ID card or upload your own page.</p>
-          <button className="btn btn-primary" onClick={onPurchase} disabled={isPurchasing}>
-            {isPurchasing ? "Purchasing..." : `Unlock Studio (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
-          </button>
-        </article>
+      {isCardStudio ? (
+        <StudioCardPreview draft={draft} />
       ) : (
         <>
-          <StyleControls draft={draft} onDraftChange={onDraftChange} />
-          <TemplateDraftEditor draft={draft} onDraftChange={onDraftChange} />
-          {errors.length > 0 && (
-            <article className="panel locked-panel">
-              <h3>Finish These Fields</h3>
-              <ul className="bullets">
-                {errors.map((error) => <li key={error}>{error}</li>)}
-              </ul>
-            </article>
-          )}
-          <div className="row">
-            <button className="btn btn-primary" onClick={onContinue} disabled={errors.length > 0}>{display.cta}</button>
+          <article className="panel card-glow mock-hero">
+            <Image src={template.image} alt={template.title} width={480} height={300} className="cover mock-cover" />
+            <div className="mock-overlay" />
+            <div className="mock-content">
+              <div className="chip">{display.badge}</div>
+              <h2>{display.title}</h2>
+              <p>{display.subtitle}</p>
+            </div>
+          </article>
+          <div className="mock-stats">
+            {display.stats.map((s, idx) => (
+              <article key={s.label} className="panel">
+                <div className="mock-stat-value">{s.value}</div>
+                <div className="mock-stat-label">{s.label || `Stat ${idx + 1}`}</div>
+              </article>
+            ))}
           </div>
         </>
       )}
+
+      {!isCardStudio ? (
+        <article className="panel">
+          <h3>What This Page Shows</h3>
+          <div className="mock-module-list">
+            {display.modules.map((m) => (
+              <div key={m.title} className="mock-module">
+                <div>
+                  <strong>{m.title}</strong>
+                  <p>{m.desc}</p>
+                </div>
+                <span className="chip">Included</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      <DraftLiveModules draft={draft} />
+
+      {!isCardStudio ? (
+        <article className="panel">
+          <h3>Activity Snapshot</h3>
+          <div className="mock-bars">
+            {[74, 88, 61, 93, 79, 68, 96].map((v, idx) => (
+              <div key={idx} className="mock-bar-wrap">
+                <div className="mock-bar" style={{ height: `${v}%` }} />
+              </div>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      <StyleControls draft={draft} onDraftChange={onDraftChange} />
+      <TemplateDraftEditor draft={draft} htmlLocked={htmlLocked} onDraftChange={onDraftChange} onPurchase={onPurchase} isPurchasing={isPurchasing} />
+      {errors.length > 0 && (
+        <article className="panel locked-panel">
+          <h3>Finish These Fields</h3>
+          <ul className="bullets">
+            {errors.map((error) => <li key={error}>{error}</li>)}
+          </ul>
+        </article>
+      )}
+      <div className="row">
+        <button className="btn btn-primary" onClick={onContinue} disabled={errors.length > 0}>{display.cta}</button>
+      </div>
     </section>
   );
 }
@@ -895,12 +885,24 @@ function StyleControls({ draft, onDraftChange }: { draft: TemplateDraft; onDraft
   );
 }
 
-function TemplateDraftEditor({ draft, onDraftChange }: { draft: TemplateDraft; onDraftChange: (draft: TemplateDraft) => void }) {
+function TemplateDraftEditor({
+  draft,
+  htmlLocked,
+  onDraftChange,
+  onPurchase,
+  isPurchasing,
+}: {
+  draft: TemplateDraft;
+  htmlLocked: boolean;
+  onDraftChange: (draft: TemplateDraft) => void;
+  onPurchase: () => Promise<void> | void;
+  isPurchasing: boolean;
+}) {
   return (
     <article className="panel card-glow">
       <h3>Customize</h3>
       <CommonFields draft={draft} onDraftChange={onDraftChange} />
-      {renderDraftFields(draft, onDraftChange)}
+      {renderDraftFields(draft, onDraftChange, { htmlLocked, onPurchase, isPurchasing })}
     </article>
   );
 }
@@ -920,7 +922,11 @@ function CommonFields({ draft, onDraftChange }: { draft: TemplateDraft; onDraftC
   );
 }
 
-function renderDraftFields(draft: TemplateDraft, onDraftChange: (draft: TemplateDraft) => void) {
+function renderDraftFields(
+  draft: TemplateDraft,
+  onDraftChange: (draft: TemplateDraft) => void,
+  html?: { htmlLocked: boolean; onPurchase: () => Promise<void> | void; isPurchasing: boolean },
+) {
   switch (draft.templateId) {
     case "personal-bio":
     case "studio":
@@ -929,7 +935,20 @@ function renderDraftFields(draft: TemplateDraft, onDraftChange: (draft: Template
         <label className="field">Tagline<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
         <label className="field">Photo URL<input value={draft.photoUrl ?? ""} onChange={(e) => onDraftChange({ ...draft, photoUrl: e.target.value })} /></label>
         <EditableLinks title="Links (up to 5)" items={draft.links.slice(0, 5)} onChange={(links) => onDraftChange({ ...draft, links: links.slice(0, 5) })} />
-        <label className="field">Own HTML<textarea value={draft.customHtml ?? ""} onChange={(e) => onDraftChange({ ...draft, customHtml: e.target.value })} placeholder="Optional. Replaces the card body." /></label>
+        <label className="field">
+          Custom HTML
+          <textarea
+            value={draft.customHtml ?? ""}
+            disabled={html?.htmlLocked}
+            onChange={(e) => onDraftChange({ ...draft, customHtml: e.target.value })}
+            placeholder={html?.htmlLocked ? "Unlock to replace the card with your own HTML." : "Optional. Replaces the card body."}
+          />
+        </label>
+        {html?.htmlLocked ? (
+          <button className="btn btn-primary" type="button" onClick={html.onPurchase} disabled={html.isPurchasing}>
+            {html.isPurchasing ? "Purchasing..." : `Unlock custom HTML (${SKR_UNLOCK_AMOUNT_UI} SKR)`}
+          </button>
+        ) : null}
       </>;
     case "social-hub":
       return <>

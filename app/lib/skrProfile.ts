@@ -31,16 +31,24 @@ export interface SkrProfile {
   cooldownEndsAt: number | null;
   isSeeker: boolean;
   updatedAt: number;
+  unavailable?: boolean;
 }
 
 const cache = new Map<string, { expires: number; value: SkrProfile }>();
 
-function rpcUrls(): string[] {
-  const configured = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "")
+function splitRpc(value: string | undefined): string[] {
+  return (value ?? "")
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-  return Array.from(new Set([...configured, DEFAULT_RPC_URL]));
+}
+
+function rpcUrls(): string[] {
+  return Array.from(new Set([
+    ...splitRpc(process.env.SOLANA_RPC_URLS),
+    ...splitRpc(process.env.NEXT_PUBLIC_SOLANA_RPC_URLS),
+    DEFAULT_RPC_URL,
+  ]));
 }
 
 async function withRpc<T>(operation: (connection: Connection) => Promise<T>): Promise<T> {
@@ -75,10 +83,13 @@ function deriveUserStakePda(user: PublicKey, guardian: PublicKey, config: Public
 }
 
 async function readLiquid(connection: Connection, wallet: PublicKey, mint: PublicKey): Promise<number> {
-  const ata = getAssociatedTokenAddressSync(mint, wallet, false, TOKEN_PROGRAM_ID);
-  const info = await connection.getAccountInfo(ata, "confirmed");
-  if (!info || info.data.length < TOKEN_ACCOUNT_AMOUNT_OFFSET + 8) return 0;
-  return uiAmount(Buffer.from(info.data).readBigUInt64LE(TOKEN_ACCOUNT_AMOUNT_OFFSET));
+  for (const programId of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
+    const ata = getAssociatedTokenAddressSync(mint, wallet, false, programId);
+    const info = await connection.getAccountInfo(ata, "confirmed");
+    if (!info || info.data.length < TOKEN_ACCOUNT_AMOUNT_OFFSET + 8) continue;
+    return uiAmount(Buffer.from(info.data).readBigUInt64LE(TOKEN_ACCOUNT_AMOUNT_OFFSET));
+  }
+  return 0;
 }
 
 async function readStake(
@@ -172,6 +183,18 @@ export async function loadSkrProfile(walletAddress: string): Promise<SkrProfile>
 
   cache.set(walletAddress, { expires: Date.now() + PROFILE_TTL_MS, value });
   return value;
+}
+
+export function skrStatRows(profile: Pick<SkrProfile, "liquid" | "staked" | "yieldEarned" | "unstaking" | "guardian" | "cooldownEndsAt">): { label: string; value: string }[] {
+  const unstaking = formatSkr(profile.unstaking);
+  const cooldown = profile.cooldownEndsAt && profile.unstaking > 0 ? " (cooldown)" : "";
+  return [
+    { label: "Liquid", value: formatSkr(profile.liquid) },
+    { label: "Staked", value: formatSkr(profile.staked) },
+    { label: "Yield", value: formatSkr(profile.yieldEarned) },
+    { label: "Unstaking", value: `${unstaking}${cooldown}` },
+    { label: "Guardian", value: profile.guardian ? shortenWallet(profile.guardian) : "None" },
+  ];
 }
 
 export function formatSkr(amount: number): string {

@@ -48,7 +48,7 @@ ARWEAVE_JWK=<arweave_jwk_json>
 - Build and submit `record_publish` with domain, template, content URI, and page proof.
 - Refresh chain state and render the receipt.
 
-## Public resolver demo surfaces
+## Public surfaces
 
 - `https://skr.site` opens the Studio.
 - `https://<name>.skr.site` resolves a published `.skr` page through wildcard routing.

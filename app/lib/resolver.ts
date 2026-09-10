@@ -30,8 +30,8 @@ export interface ReverseResolution {
 }
 
 function normalizeRpcUrlList(): string[] {
-  const configured = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "")
-    .split(",")
+  const configured = [process.env.SOLANA_RPC_URLS, process.env.NEXT_PUBLIC_SOLANA_RPC_URLS]
+    .flatMap((value) => (value ?? "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
   return Array.from(new Set([...configured, DEFAULT_RPC_URL]));

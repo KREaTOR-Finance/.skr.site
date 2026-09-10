@@ -265,7 +265,7 @@ export function defaultDraftFor(templateId: string): TemplateDraft {
     case "bring-your-own":
       return {
         templateId: templateId === "bring-your-own" ? "bring-your-own" : "studio",
-        headline: "moneysauce",
+        headline: "",
         subtext: "Seeker ID",
         themeAccent: "#00C9A7",
         fontStyle: "Default",
@@ -273,14 +273,12 @@ export function defaultDraftFor(templateId: string): TemplateDraft {
         bio: "",
         photoUrl: "",
         customHtml: "",
-        links: [
-          { label: "X", url: "" },
-        ],
+        links: [{ label: "", url: "" }],
       };
     default:
       return {
         templateId: "studio",
-        headline: "moneysauce",
+        headline: "",
         subtext: "Seeker ID",
         themeAccent: "#00C9A7",
         fontStyle: "Default",
@@ -288,7 +286,7 @@ export function defaultDraftFor(templateId: string): TemplateDraft {
         bio: "",
         photoUrl: "",
         customHtml: "",
-        links: [{ label: "X", url: "" }],
+        links: [{ label: "", url: "" }],
       };
   }
 }

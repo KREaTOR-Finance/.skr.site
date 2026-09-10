@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { publicProfileUrl, studioUrl } from "@/app/lib/resolver";
-import { formatSkr, shortenWallet, type SkrProfile } from "@/app/lib/skrProfile";
+import { formatSkr, shortenWallet, skrStatRows, type SkrProfile } from "@/app/lib/skrProfile";
 
 const POLL_MS = 25_000;
 
@@ -121,24 +121,16 @@ export default function SeekerIdCard({
         <span>SKR</span>
       </div>
       <div className="wallet-box seeker-id-tiles">
-        <strong>Liquid</strong>
-        <span>{formatSkr(profile.liquid)}</span>
-        <strong>Staked</strong>
-        <span>{formatSkr(profile.staked)}{profile.yieldEarned > 0 ? ` +${formatSkr(profile.yieldEarned)}` : ""}</span>
-        {profile.unstaking > 0 ? (
-          <>
-            <strong>Unstaking</strong>
-            <span>{formatSkr(profile.unstaking)}{cooldown ? ` · ${cooldown}` : ""}</span>
-          </>
-        ) : null}
-        {profile.guardian ? (
-          <>
-            <strong>Guardian</strong>
-            <span className="mono">{shortenWallet(profile.guardian)}</span>
-          </>
-        ) : null}
+        {skrStatRows(profile).map((row) => (
+          <div key={row.label} className="seeker-id-stat">
+            <strong>{row.label}</strong>
+            <span className={row.label === "Guardian" ? "mono" : undefined}>
+              {row.label === "Unstaking" && cooldown ? `${formatSkr(profile.unstaking)} · ${cooldown}` : row.value}
+            </span>
+          </div>
+        ))}
       </div>
-      <small className="seeker-id-updated">{secondsAgo(profile.updatedAt)}</small>
+      {profile.unavailable ? <small className="seeker-id-updated">SKR stats unavailable</small> : <small className="seeker-id-updated">{secondsAgo(profile.updatedAt)}</small>}
       <div className="row">
         <button
           className="btn btn-ghost"

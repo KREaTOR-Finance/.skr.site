@@ -14,7 +14,8 @@ export const ANS_UPDATE_DISCRIMINATOR_HEX = "dbc858b09e3ffd7f";
 export const DEFAULT_RECORD_SPACE = 512;
 
 export const STUDIO_TEMPLATE_ID = "studio";
-export const STUDIO_ALIAS_IDS = ["studio", "bring-your-own"] as const;
+export const HTML_TEMPLATE_ID = "bring-your-own";
+export const STUDIO_ALIAS_IDS = [STUDIO_TEMPLATE_ID, HTML_TEMPLATE_ID] as const;
 
 export const STUDIO_TINTS = [
   { id: "teal", value: "#00C9A7", label: "Teal" },
@@ -35,17 +36,21 @@ export const templates: TemplateDefinition[] = [
   {
     id: STUDIO_TEMPLATE_ID,
     title: "Studio",
-    description: "Theme your Seeker ID card or upload your own page",
+    description: "Theme your Seeker ID card. Custom HTML is optional and paid.",
     mark: "S",
-    premium: true,
+    premium: false,
     screen: "editor",
     image: "/seeker/image (1).jpg",
   },
 ];
 
 export const freeTemplateIds = templates.filter((t) => !t.premium).map((t) => t.id);
-export const premiumTemplateIds = [...STUDIO_ALIAS_IDS];
+export const premiumTemplateIds = [HTML_TEMPLATE_ID];
 
 export function isStudioEntitlementId(templateId: string): boolean {
   return (STUDIO_ALIAS_IDS as readonly string[]).includes(templateId);
+}
+
+export function isHtmlEntitlementId(templateId: string): boolean {
+  return templateId === HTML_TEMPLATE_ID;
 }

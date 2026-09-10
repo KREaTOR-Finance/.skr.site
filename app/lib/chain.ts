@@ -91,8 +91,8 @@ function normalizeRpcUrlList(rpcInput?: string | string[]): string[] {
     : rpcInput
       ? rpcInput.split(",")
       : [];
-  const envList = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "")
-    .split(",")
+  const envList = [process.env.SOLANA_RPC_URLS, process.env.NEXT_PUBLIC_SOLANA_RPC_URLS]
+    .flatMap((value) => (value ?? "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
 
