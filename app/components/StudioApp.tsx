@@ -97,7 +97,7 @@ function readJsonSafe<T>(key: string, fallback: T): T {
 }
 
 function isCoreScreen(screen: ScreenId): boolean {
-  return ["home", "templates", "wallet", "profile", "settings", "editor"].includes(screen);
+  return ["templates", "wallet", "editor"].includes(screen);
 }
 
 export default function StudioApp() {
@@ -111,7 +111,9 @@ export default function StudioApp() {
   const [ownedTemplateIds, setOwnedTemplateIds] = useState<string[]>([]);
   const [templateDrafts, setTemplateDrafts] = useState<Record<string, TemplateDraft>>(() => createInitialTemplateDrafts());
   const [chainSyncing, setChainSyncing] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [splashIntroDone, setSplashIntroDone] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function StudioApp() {
       appIdentity: {
         name: ".skr Studio",
         uri: "https://skr.site",
+        icon: "/icon.jpg",
       },
       authorizationCache: createDefaultAuthorizationCache(),
       chains: [SOLANA_CHAIN],
@@ -134,6 +137,11 @@ export default function StudioApp() {
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setSplashIntroDone(true), 15_000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? templates[0],
@@ -251,13 +259,17 @@ export default function StudioApp() {
     });
   }
 
-  async function handleConnect(provider: WalletProviderName) {
+  async function handleConnect(provider: WalletProviderName, next?: ScreenId) {
+    setIsConnecting(true);
     try {
       const connected = await connectWallet(provider);
       setWallet(connected);
       setToast(`${connected.name} connected`);
+      if (next) nav(next);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Wallet connect failed");
+    } finally {
+      setIsConnecting(false);
     }
   }
 
@@ -410,17 +422,31 @@ export default function StudioApp() {
         </div>
       )}
 
-      {screen === "splash" && (
+      {screen === "splash" && !splashIntroDone && (
+        <section className="open-bounce" onClick={() => setSplashIntroDone(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSplashIntroDone(true); }}>
+          <div className="open-bounce-glow" />
+          <Image src="/brand/skr-logo.jpg" alt=".skr" width={220} height={220} className="hero-logo brand-logo open-bounce-logo" priority />
+        </section>
+      )}
+
+      {screen === "splash" && splashIntroDone && (
         <section className="center-stack welcome-splash">
           <div className="welcome-logo-wrap">
             <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={190} height={190} className="hero-logo brand-logo" priority />
           </div>
-          <span className="welcome-kicker">Seeker identity studio</span>
+          <span className="welcome-kicker">Seeker ID</span>
           <h2><span className="shimmer-text">.skr</span> Studio</h2>
-          <p>Your Solana identity, beautifully packaged for Seeker.</p>
+          <p>
+            A .skr name gets a free Seeker ID card at name.skr.site — SKR totals, wallet, and a public page.
+            Studio can theme that card. Custom HTML is optional.
+          </p>
+          <p>You can skip wallet connect to Find .skr users.</p>
           <div className="welcome-actions">
-            <button className="btn btn-primary" onClick={() => nav("home")}>Open Studio</button>
-            <a className="btn btn-ghost" href="/reverse">Find a .skr</a>
+            <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")} disabled={isConnecting}>
+              {isConnecting ? "Connecting..." : "Continue with Seed Vault"}
+            </button>
+            <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
+            <button className="btn btn-ghost" onClick={() => nav("wallet")}>Other wallet</button>
           </div>
         </section>
       )}
@@ -589,10 +615,8 @@ export default function StudioApp() {
 
       {isCoreScreen(screen) && (
         <nav className="bottom-nav">
-          <button className={screen === "home" ? "active" : ""} onClick={() => nav("home")}>Home</button>
           <button className={screen === "templates" || screen === "editor" ? "active" : ""} onClick={() => nav("editor")}>Studio</button>
           <button className={screen === "wallet" ? "active" : ""} onClick={() => nav("wallet")}>Wallet</button>
-          <button className={screen === "profile" ? "active" : ""} onClick={() => nav("profile")}>Profile</button>
           <a href="https://skr.site/reverse">Find</a>
         </nav>
       )}
