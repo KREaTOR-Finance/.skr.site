@@ -884,6 +884,35 @@ section,
   }
 }
 
+.site-release {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 16px;
+  padding: 10px 16px 18px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.site-release a {
+  color: var(--teal);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.studio-shell .site-release {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+}
+
+.studio-shell:has(.bottom-nav) .site-release {
+  bottom: 70px;
+}
+
 .studio-shell.mwa-active {
   visibility: hidden;
   pointer-events: none;

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import SeekerIdCard from "@/app/components/SeekerIdCard";
 import SiteHeader from "@/app/components/SiteHeader";
+import SiteFooter from "@/app/components/SiteFooter";
 import { resolveSkrDomain, studioUrl } from "@/app/lib/resolver";
 import { loadSkrProfile } from "@/app/lib/skrProfile";
 
@@ -36,6 +37,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
           src={result.url}
           sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
         />
+        <SiteFooter />
       </main>
     );
   }
@@ -60,6 +62,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
         <div className="ambient ambient-b" />
         <SiteHeader />
         <SeekerIdCard domain={result.domain} owner={result.owner} picture={result.picture} initial={profile} />
+        <SiteFooter />
       </main>
     );
   }
@@ -83,6 +86,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
           <Link className="btn btn-ghost" href="/reverse">Find a .skr by wallet</Link>
         </div>
       </section>
+      <SiteFooter />
     </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import SiteFooter from "@/app/components/SiteFooter";
 import type { ReactNode } from "react";
 import {
   createDefaultAuthorizationCache,
@@ -401,7 +402,7 @@ export default function StudioApp() {
       template={selectedTemplate}
       draft={selectedTemplateDraft}
       locked={false}
-      htmlLocked={!htmlOwned}
+      htmlLocked={false}
       errors={selectedTemplateErrors}
       isPurchasing={isPurchasing}
       onPurchase={() => handlePurchase(HTML_TEMPLATE_ID)}
@@ -445,6 +446,7 @@ export default function StudioApp() {
             <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")}>
               Continue with Seed Vault
             </button>
+            <button className="btn btn-ghost" onClick={() => nav("editor")}>Preview without connecting</button>
             <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
           </div>
         </section>
@@ -622,6 +624,7 @@ export default function StudioApp() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+      {splashIntroDone && !isConnecting ? <SiteFooter /> : null}
     </main>
   );
 }

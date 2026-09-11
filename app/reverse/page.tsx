@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import SiteHeader from "@/app/components/SiteHeader";
+import SiteFooter from "@/app/components/SiteFooter";
 import { isSolanaPubkey, normalizeSkrDomain, resolveSkrDomain, reverseResolveWallet } from "@/app/lib/resolver";
 
 export default async function ReversePage({
@@ -113,6 +114,7 @@ export default async function ReversePage({
           </div>
         )}
       </section>
+      <SiteFooter />
     </main>
   );
 }
