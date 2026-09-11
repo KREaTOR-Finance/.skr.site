@@ -931,6 +931,63 @@ function TemplateDraftEditor({
   );
 }
 
+function KreationBuilder({
+  draft,
+  onDraftChange,
+}: {
+  draft: Extract<TemplateDraft, { templateId: "studio" | "bring-your-own" | "personal-bio" }>;
+  onDraftChange: (draft: TemplateDraft) => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    if (!prompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/kreation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: draft.headline,
+          pitch: draft.subtext || draft.bio,
+          photoUrl: draft.photoUrl ?? "",
+          tint: draft.themeAccent,
+          links: draft.links,
+          prompt,
+        }),
+      });
+      const data = (await res.json()) as { html?: string; error?: string };
+      if (!res.ok || !data.html) throw new Error(data.error || "Generate failed");
+      onDraftChange({ ...draft, customHtml: data.html });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="panel">
+      <h3>Build from prompt</h3>
+      <p>Your name, tagline, tint, photo, and links plus a custom site prompt. Generates a unique page. Preview here. Publish still uses the HTML unlock.</p>
+      <label className="field">
+        Site build prompt
+        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the page: layout, tone, sections, what should feel unique." />
+      </label>
+      <button className="btn btn-primary" type="button" onClick={generate} disabled={busy || !prompt.trim()}>
+        {busy ? "Building..." : "Generate site"}
+      </button>
+      {error ? <p>{error}</p> : null}
+      {draft.customHtml?.trim() ? (
+        <iframe className="kreation-preview" title="Site preview" sandbox="" srcDoc={draft.customHtml} />
+      ) : null}
+    </article>
+  );
+}
+
 function CommonFields({ draft, onDraftChange }: { draft: TemplateDraft; onDraftChange: (draft: TemplateDraft) => void }) {
   return (
     <>
@@ -959,6 +1016,7 @@ function renderDraftFields(
         <label className="field">Tagline<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
         <label className="field">Photo URL<input value={draft.photoUrl ?? ""} onChange={(e) => onDraftChange({ ...draft, photoUrl: e.target.value })} /></label>
         <EditableLinks title="Links (up to 5)" items={draft.links.slice(0, 5)} onChange={(links) => onDraftChange({ ...draft, links: links.slice(0, 5) })} />
+        <KreationBuilder draft={draft} onDraftChange={onDraftChange} />
         <label className="field">
           Custom HTML
           <textarea

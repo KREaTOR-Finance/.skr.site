@@ -219,6 +219,15 @@ section,
   50% { transform: translateY(-42px); }
 }
 
+.kreation-preview {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #000;
+  margin-top: 12px;
+}
+
 .welcome-splash {
   min-height: calc(100dvh - 28px);
   padding: 24px 4px 34px;
