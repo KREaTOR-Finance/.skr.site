@@ -446,7 +446,6 @@ export default function StudioApp() {
               {isConnecting ? "Connecting..." : "Continue with Seed Vault"}
             </button>
             <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
-            <button className="btn btn-ghost" onClick={() => nav("wallet")}>Other wallet</button>
           </div>
         </section>
       )}
@@ -504,12 +503,11 @@ export default function StudioApp() {
         <section className="grid two">
           <article className="panel card-glow">
             <h2>Wallet Connect</h2>
-            <p>Seed Vault via Solana Mobile MWA is the primary wallet. Desktop wallets stay available as fallback.</p>
+            <p>Check in with Seed Vault through Solana Mobile Wallet Adapter. Android Chrome on Seeker.</p>
             <div className="stack">
-              <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault")}>Connect Seed Vault (MWA)</button>
-              <button className="btn btn-ghost" onClick={() => handleConnect("Phantom")}>Connect Phantom</button>
-              <button className="btn btn-ghost" onClick={() => handleConnect("Backpack")}>Connect Backpack</button>
-              <button className="btn btn-ghost" onClick={() => handleConnect("Solflare")}>Connect Solflare</button>
+              <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault")} disabled={isConnecting}>
+                {isConnecting ? "Connecting..." : "Connect Seed Vault"}
+              </button>
             </div>
             {wallet && (
               <div className="wallet-box">
