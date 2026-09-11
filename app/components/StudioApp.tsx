@@ -411,7 +411,7 @@ export default function StudioApp() {
   );
 
   return (
-    <main className="studio-shell">
+    <main className={`studio-shell${isConnecting ? " mwa-active" : ""}`}>
       <div className="ambient ambient-a" />
       <div className="ambient ambient-b" />
       {screen !== "splash" && (
@@ -429,28 +429,24 @@ export default function StudioApp() {
         </section>
       )}
 
-      {screen === "splash" && splashIntroDone && (
-        <section className={`center-stack welcome-splash${isConnecting ? " is-connecting" : ""}`}>
+      {screen === "splash" && splashIntroDone && !isConnecting && (
+        <section className="center-stack welcome-splash">
           <div className="welcome-logo-wrap">
             <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={190} height={190} className="hero-logo brand-logo" priority />
           </div>
-          {!isConnecting && (
-            <>
-              <span className="welcome-kicker">Seeker ID</span>
-              <h2><span className="shimmer-text">.skr</span> Studio</h2>
-              <p>
-                A .skr name gets a free Seeker ID card at name.skr.site — SKR totals, wallet, and a public page.
-                Studio can theme that card. Custom HTML is optional.
-              </p>
-              <p>You can skip wallet connect to Find .skr users.</p>
-              <div className="welcome-actions">
-                <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")} disabled={isConnecting}>
-                  Continue with Seed Vault
-                </button>
-                <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
-              </div>
-            </>
-          )}
+          <span className="welcome-kicker">Seeker ID</span>
+          <h2><span className="shimmer-text">.skr</span> Studio</h2>
+          <p>
+            A .skr name gets a free Seeker ID card at name.skr.site — SKR totals, wallet, and a public page.
+            Studio can theme that card. Custom HTML is optional.
+          </p>
+          <p>You can skip wallet connect to Find .skr users.</p>
+          <div className="welcome-actions">
+            <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")}>
+              Continue with Seed Vault
+            </button>
+            <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
+          </div>
         </section>
       )}
 
