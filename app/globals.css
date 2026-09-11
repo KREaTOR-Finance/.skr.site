@@ -884,3 +884,8 @@ section,
   }
 }
 
+.mobile-wallet-adapter-embedded-modal-container {
+  z-index: 10000 !important;
+  background-color: rgba(10, 10, 10, 0.92) !important;
+}
+

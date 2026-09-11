@@ -430,23 +430,27 @@ export default function StudioApp() {
       )}
 
       {screen === "splash" && splashIntroDone && (
-        <section className="center-stack welcome-splash">
+        <section className={`center-stack welcome-splash${isConnecting ? " is-connecting" : ""}`}>
           <div className="welcome-logo-wrap">
             <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={190} height={190} className="hero-logo brand-logo" priority />
           </div>
-          <span className="welcome-kicker">Seeker ID</span>
-          <h2><span className="shimmer-text">.skr</span> Studio</h2>
-          <p>
-            A .skr name gets a free Seeker ID card at name.skr.site — SKR totals, wallet, and a public page.
-            Studio can theme that card. Custom HTML is optional.
-          </p>
-          <p>You can skip wallet connect to Find .skr users.</p>
-          <div className="welcome-actions">
-            <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")} disabled={isConnecting}>
-              {isConnecting ? "Connecting..." : "Continue with Seed Vault"}
-            </button>
-            <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
-          </div>
+          {!isConnecting && (
+            <>
+              <span className="welcome-kicker">Seeker ID</span>
+              <h2><span className="shimmer-text">.skr</span> Studio</h2>
+              <p>
+                A .skr name gets a free Seeker ID card at name.skr.site — SKR totals, wallet, and a public page.
+                Studio can theme that card. Custom HTML is optional.
+              </p>
+              <p>You can skip wallet connect to Find .skr users.</p>
+              <div className="welcome-actions">
+                <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault", "editor")} disabled={isConnecting}>
+                  Continue with Seed Vault
+                </button>
+                <a className="btn btn-ghost" href="https://skr.site/reverse">Find .skr users</a>
+              </div>
+            </>
+          )}
         </section>
       )}
 
@@ -504,11 +508,13 @@ export default function StudioApp() {
           <article className="panel card-glow">
             <h2>Wallet Connect</h2>
             <p>Check in with Seed Vault through Solana Mobile Wallet Adapter. Android Chrome on Seeker.</p>
-            <div className="stack">
-              <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault")} disabled={isConnecting}>
-                {isConnecting ? "Connecting..." : "Connect Seed Vault"}
-              </button>
-            </div>
+            {!isConnecting && (
+              <div className="stack">
+                <button className="btn btn-primary" onClick={() => handleConnect("Seed Vault")} disabled={isConnecting}>
+                  Connect Seed Vault
+                </button>
+              </div>
+            )}
             {wallet && (
               <div className="wallet-box">
                 <strong>{wallet.name}</strong>
