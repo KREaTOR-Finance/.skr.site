@@ -7,7 +7,16 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
+import { kreationPaymentMemo } from "./kreation";
+import { evaluateKreationPayment, type ParsedPaymentTx } from "./kreationPay";
 import { getDomainKey, NameRecordHeader } from "@onsol/tldparser";
 import {
   ANS_CREATE_DISCRIMINATOR_HEX,
@@ -17,6 +26,8 @@ import {
   SKR_MINT,
   SKR_UNLOCK_AMOUNT_RAW,
   SKR_TREASURY,
+  SKR_DECIMALS,
+  KREATION_GENERATE_SKR_RAW,
 } from "./sharedSpec";
 import type { PublishPayload, WalletSession } from "./types";
 
@@ -597,4 +608,128 @@ export async function preflightTemplatePurchase(params: {
       enoughBalance: entitlementState.purchased || rawBalance >= requiredRaw,
     };
   });
+}
+
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+function tokenProgramFromMintOwner(owner: PublicKey): PublicKey {
+  if (owner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
+  return TOKEN_PROGRAM_ID;
+}
+
+export async function signAndSendKreationGenerateTx(params: {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  wallet: WalletSigner;
+  prompt: string;
+}) {
+  const mint = readSkrMint();
+  const treasury = readSkrTreasury();
+  const amount = BigInt(KREATION_GENERATE_SKR_RAW);
+  const memo = kreationPaymentMemo(params.prompt);
+
+  return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
+    const mintInfo = await connection.getAccountInfo(mint, "confirmed");
+    if (!mintInfo) throw new Error("SKR mint was not found");
+    const tokenProgram = tokenProgramFromMintOwner(mintInfo.owner);
+    const source = getAssociatedTokenAddressSync(mint, params.wallet.publicKey, false, tokenProgram);
+    const destination = getAssociatedTokenAddressSync(mint, treasury, false, tokenProgram);
+    const sourceInfo = await connection.getAccountInfo(source, "confirmed");
+    if (!sourceInfo?.data || sourceInfo.data.length < TOKEN_ACCOUNT_AMOUNT_OFFSET + 8) {
+      throw new Error("We could not find SKR in this wallet");
+    }
+    const rawBalance = Buffer.from(sourceInfo.data).readBigUInt64LE(TOKEN_ACCOUNT_AMOUNT_OFFSET);
+    if (rawBalance < amount) {
+      throw new Error(`Not enough SKR. Need 25, have ${(Number(rawBalance) / 1_000_000).toFixed(2)}.`);
+    }
+
+    const destInfo = await connection.getAccountInfo(destination, "confirmed");
+    const ixs: TransactionInstruction[] = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+    ];
+    if (!destInfo) {
+      ixs.push(
+        createAssociatedTokenAccountIdempotentInstruction(
+          params.wallet.publicKey,
+          destination,
+          treasury,
+          mint,
+          tokenProgram,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+    }
+    ixs.push(
+      createTransferCheckedInstruction(
+        source,
+        mint,
+        destination,
+        params.wallet.publicKey,
+        amount,
+        SKR_DECIMALS,
+        [],
+        tokenProgram,
+      ),
+      new TransactionInstruction({
+        keys: [{ pubkey: params.wallet.publicKey, isSigner: true, isWritable: false }],
+        programId: MEMO_PROGRAM_ID,
+        data: Buffer.from(memo, "utf8"),
+      }),
+    );
+
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    const message = new TransactionMessage({
+      payerKey: params.wallet.publicKey,
+      recentBlockhash: blockhash,
+      instructions: ixs,
+    }).compileToV0Message();
+    const signed = await params.wallet.signTransaction(new VersionedTransaction(message));
+    const sig = await connection.sendTransaction(signed, { maxRetries: 3 });
+    await connection.confirmTransaction(sig, "confirmed");
+    return sig;
+  });
+}
+
+export async function verifyKreationPaymentTx(params: {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  signature: string;
+  wallet: string;
+  prompt: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    return await withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
+      const tx = await connection.getParsedTransaction(params.signature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: "confirmed",
+      });
+      if (!tx) return { ok: false, error: "Payment transaction was not found" };
+      const accountKeys = tx.transaction.message.accountKeys.map((key) => ({
+        pubkey: typeof key === "string" ? key : key.pubkey.toBase58(),
+      }));
+      const normalized = JSON.parse(
+        JSON.stringify({
+          meta: {
+            err: tx.meta?.err ?? null,
+            preTokenBalances: tx.meta?.preTokenBalances ?? [],
+            postTokenBalances: tx.meta?.postTokenBalances ?? [],
+            innerInstructions: tx.meta?.innerInstructions ?? [],
+            logMessages: tx.meta?.logMessages ?? [],
+          },
+          transaction: {
+            message: {
+              accountKeys,
+              instructions: tx.transaction.message.instructions,
+            },
+          },
+        }),
+      ) as ParsedPaymentTx;
+      return evaluateKreationPayment(normalized, {
+        wallet: params.wallet,
+        prompt: params.prompt,
+      });
+    });
+  } catch (error) {
+    return { ok: false, error: toUserFacingChainError(error) };
+  }
 }

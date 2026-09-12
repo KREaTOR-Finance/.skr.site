@@ -11,13 +11,31 @@ export type KreationInput = {
 
 const TINTS = ["#00C9A7", "#8B7CFF", "#D4AF37"];
 
-function hashSeed(text: string): number {
+export function hashSeed(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
     h ^= text.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+export function kreationPaymentMemo(prompt: string): string {
+  return `skr-kreation:${hashSeed(prompt.trim()).toString(16)}`;
+}
+
+export const KREATION_HTML_CHAR_CAP = 40_000;
+
+export function extractKreationHtmlFromModel(text: string): string {
+  let raw = text.trim();
+  const fence = raw.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  if (fence?.[1]) raw = fence[1].trim();
+  const start = raw.search(/<!doctype html|<html/i);
+  if (start >= 0) raw = raw.slice(start);
+  if (!/<(?:!doctype|html|body|main|section|article|div)/i.test(raw)) {
+    throw new Error("Grok did not return HTML");
+  }
+  return stripUnsafeHtml(raw).slice(0, KREATION_HTML_CHAR_CAP);
 }
 
 export function sanitizeKreationColor(value: string): string {
@@ -47,7 +65,7 @@ function esc(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function stripUnsafeHtml(html: string): string {
+export function stripUnsafeHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")

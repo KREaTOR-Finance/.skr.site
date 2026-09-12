@@ -10,7 +10,7 @@ import {
   createDefaultWalletNotFoundHandler,
   registerMwa,
 } from "@solana-mobile/wallet-standard-mobile";
-import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, premiumTemplateIds, STUDIO_TEMPLATE_ID, HTML_TEMPLATE_ID, STUDIO_TINTS, isHtmlEntitlementId } from "@/app/lib/sharedSpec";
+import { TEMPLATE_CHANGE_FEE_SOL, templates, SKR_UNLOCK_AMOUNT_UI, KREATION_GENERATE_SKR_UI, premiumTemplateIds, STUDIO_TEMPLATE_ID, HTML_TEMPLATE_ID, STUDIO_TINTS, isHtmlEntitlementId } from "@/app/lib/sharedSpec";
 import type { PublishResult, ScreenId, TemplateCustomization } from "@/app/lib/types";
 import { buildTemplateHtml, createContentUriAndHash } from "@/app/lib/publish";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter, type WalletProviderName } from "@/app/lib/wallet";
@@ -41,6 +41,7 @@ import {
   preflightTemplatePurchase,
   signAndSendPublishTx,
   signAndSendPurchaseTx,
+  signAndSendKreationGenerateTx,
   toUserFacingChainError,
 } from "@/app/lib/chain";
 
@@ -408,6 +409,7 @@ export default function StudioApp() {
       onPurchase={() => handlePurchase(HTML_TEMPLATE_ID)}
       onDraftChange={updateTemplateDraft}
       onContinue={() => goto("publish")}
+      wallet={wallet}
     />
   );
 
@@ -666,6 +668,7 @@ function TemplateRoutePanel({
   onPurchase,
   onDraftChange,
   onContinue,
+  wallet,
 }: {
   template: (typeof templates)[number];
   draft: TemplateDraft;
@@ -676,6 +679,7 @@ function TemplateRoutePanel({
   onPurchase: () => Promise<void> | void;
   onDraftChange: (draft: TemplateDraft) => void;
   onContinue: () => void;
+  wallet: BrowserWalletAdapter | null;
 }) {
   const display = draftSummary(draft);
   const isCardStudio = draft.templateId === "studio" || draft.templateId === "bring-your-own" || draft.templateId === "personal-bio";
@@ -739,7 +743,7 @@ function TemplateRoutePanel({
       ) : null}
 
       <StyleControls draft={draft} onDraftChange={onDraftChange} />
-      <TemplateDraftEditor draft={draft} htmlLocked={htmlLocked} onDraftChange={onDraftChange} onPurchase={onPurchase} isPurchasing={isPurchasing} />
+      <TemplateDraftEditor draft={draft} htmlLocked={htmlLocked} onDraftChange={onDraftChange} onPurchase={onPurchase} isPurchasing={isPurchasing} wallet={wallet} />
       {errors.length > 0 && (
         <article className="panel locked-panel">
           <h3>Finish These Fields</h3>
@@ -918,18 +922,20 @@ function TemplateDraftEditor({
   onDraftChange,
   onPurchase,
   isPurchasing,
+  wallet,
 }: {
   draft: TemplateDraft;
   htmlLocked: boolean;
   onDraftChange: (draft: TemplateDraft) => void;
   onPurchase: () => Promise<void> | void;
   isPurchasing: boolean;
+  wallet: BrowserWalletAdapter | null;
 }) {
   return (
     <article className="panel card-glow">
       <h3>Customize</h3>
       <CommonFields draft={draft} onDraftChange={onDraftChange} />
-      {renderDraftFields(draft, onDraftChange, { htmlLocked, onPurchase, isPurchasing })}
+      {renderDraftFields(draft, onDraftChange, { htmlLocked, onPurchase, isPurchasing, wallet })}
     </article>
   );
 }
@@ -937,19 +943,53 @@ function TemplateDraftEditor({
 function KreationBuilder({
   draft,
   onDraftChange,
+  wallet,
 }: {
   draft: Extract<TemplateDraft, { templateId: "studio" | "bring-your-own" | "personal-bio" }>;
   onDraftChange: (draft: TemplateDraft) => void;
+  wallet: BrowserWalletAdapter | null;
 }) {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [grok, setGrok] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/kreation")
+      .then((res) => res.json() as Promise<{ grok?: boolean }>)
+      .then((data) => {
+        if (!cancelled) setGrok(Boolean(data.grok));
+      })
+      .catch(() => {
+        if (!cancelled) setGrok(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const paidGrok = Boolean(wallet && grok);
 
   async function generate() {
     if (!prompt.trim()) return;
     setBusy(true);
     setError(null);
     try {
+      let signature: string | undefined;
+      const walletKey = wallet?.publicKey.toBase58();
+      if (paidGrok && wallet && walletKey) {
+        const cacheKey = `skr-kreation-sig:${walletKey}:${prompt.trim()}`;
+        signature = sessionStorage.getItem(cacheKey) || undefined;
+        if (!signature) {
+          signature = await signAndSendKreationGenerateTx({
+            rpcUrls: MAINNET_RPC_URLS,
+            wallet,
+            prompt,
+          });
+          sessionStorage.setItem(cacheKey, signature);
+        }
+      }
       const res = await fetch("/api/kreation", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -960,6 +1000,7 @@ function KreationBuilder({
           tint: draft.themeAccent,
           links: draft.links,
           prompt,
+          ...(signature && walletKey ? { signature, wallet: walletKey } : {}),
         }),
       });
       const data = (await res.json()) as { html?: string; error?: string };
@@ -975,13 +1016,17 @@ function KreationBuilder({
   return (
     <article className="panel">
       <h3>Build from prompt</h3>
-      <p>Your name, tagline, tint, photo, and links plus a custom site prompt. Generates a unique page. Preview here. Publish still uses the HTML unlock.</p>
+      <p>
+        {paidGrok
+          ? `Grok builds a full page for ${KREATION_GENERATE_SKR_UI} SKR. Local preview stays free without a wallet. Publish is still ${SKR_UNLOCK_AMOUNT_UI} SKR once.`
+          : "Local preview is free. Connect Seed Vault after Grok is configured to generate a full page for 25 SKR."}
+      </p>
       <label className="field">
         Site build prompt
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the page: layout, tone, sections, what should feel unique." />
       </label>
       <button className="btn btn-primary" type="button" onClick={generate} disabled={busy || !prompt.trim()}>
-        {busy ? "Building..." : "Generate site"}
+        {busy ? "Building..." : paidGrok ? `Generate · ${KREATION_GENERATE_SKR_UI} SKR` : "Generate site"}
       </button>
       {error ? <p>{error}</p> : null}
       {draft.customHtml?.trim() ? (
@@ -1009,7 +1054,7 @@ function CommonFields({ draft, onDraftChange }: { draft: TemplateDraft; onDraftC
 function renderDraftFields(
   draft: TemplateDraft,
   onDraftChange: (draft: TemplateDraft) => void,
-  html?: { htmlLocked: boolean; onPurchase: () => Promise<void> | void; isPurchasing: boolean },
+  html?: { htmlLocked: boolean; onPurchase: () => Promise<void> | void; isPurchasing: boolean; wallet: BrowserWalletAdapter | null },
 ) {
   switch (draft.templateId) {
     case "personal-bio":
@@ -1019,7 +1064,7 @@ function renderDraftFields(
         <label className="field">Tagline<textarea value={draft.bio} onChange={(e) => onDraftChange({ ...draft, bio: e.target.value })} /></label>
         <label className="field">Photo URL<input value={draft.photoUrl ?? ""} onChange={(e) => onDraftChange({ ...draft, photoUrl: e.target.value })} /></label>
         <EditableLinks title="Links (up to 5)" items={draft.links.slice(0, 5)} onChange={(links) => onDraftChange({ ...draft, links: links.slice(0, 5) })} />
-        <KreationBuilder draft={draft} onDraftChange={onDraftChange} />
+        <KreationBuilder draft={draft} onDraftChange={onDraftChange} wallet={html?.wallet ?? null} />
         <label className="field">
           Custom HTML
           <textarea
