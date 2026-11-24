@@ -918,3 +918,253 @@ section,
   pointer-events: none;
 }
 
+
+/* Studio v1 */
+.studio-start,
+.studio-editor,
+.publish-card {
+  width: min(100%, 560px);
+  margin: 0 auto;
+}
+
+.studio-start {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding-bottom: 48px;
+}
+
+.studio-start h1,
+.studio-editor h2,
+.publish-card h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 7vw, 2.4rem);
+  letter-spacing: -0.03em;
+}
+
+.studio-start .lead,
+.mini-preview p,
+.block-item small,
+.fine-print {
+  color: var(--muted);
+}
+
+.fine-print {
+  font-size: 0.78rem;
+  max-width: 36rem;
+}
+
+.starter-list {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+
+.starter-card {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--glass-shadow);
+}
+
+.starter-card.selected {
+  border-color: color-mix(in srgb, var(--teal) 70%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--teal) 50%, transparent), var(--glass-shadow);
+}
+
+.starter-card strong {
+  font-size: 1rem;
+}
+
+.starter-card span:last-child {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.start-prompt,
+.prompt-line {
+  width: 100%;
+  text-align: left;
+}
+
+.editor-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.tint-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.tint-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+
+.studio-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 14px;
+}
+
+.studio-tabs button {
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  padding: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.studio-tabs button.on {
+  background: color-mix(in srgb, var(--teal) 18%, transparent);
+  color: var(--text);
+}
+
+.mini-preview {
+  padding: 18px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.mini-preview h2 {
+  margin: 8px 0 4px;
+}
+
+.preview-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.preview-links span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.block-heading {
+  margin: 4px 0 10px;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chrome);
+}
+
+.block-list {
+  display: grid;
+  gap: 10px;
+}
+
+.block-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.block-item.open {
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--border));
+}
+
+.block-item-head {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.block-item-head small {
+  display: block;
+  margin-top: 2px;
+}
+
+.block-move,
+.add-block-row,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.block-body {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.skr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+.site-preview-frame {
+  width: 100%;
+  min-height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: #000;
+}
+
+.studio-bar {
+  position: sticky;
+  bottom: 10px;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(10, 10, 10, 0.88);
+  backdrop-filter: blur(16px);
+}
+
+.publish-card {
+  display: grid;
+  gap: 12px;
+}
+
+.studio-start .welcome-actions,
+.publish-card .row {
+  width: 100%;
+}
+
+.field.compact {
+  flex: 1;
+}

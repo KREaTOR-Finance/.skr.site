@@ -414,6 +414,79 @@ interface WalletSigner {
   signTransaction(tx: VersionedTransaction): Promise<VersionedTransaction>;
 }
 
+
+export function assembleAnsOnlyPublishInstructions(
+  recordInstructions: TransactionInstruction[],
+): TransactionInstruction[] {
+  return [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ...recordInstructions,
+  ];
+}
+
+export function assertAnsOnlyPublishInstructions(
+  instructions: TransactionInstruction[],
+  skrProgramId?: PublicKey,
+): void {
+  if (instructions.length < 2) {
+    throw new Error("ANS publish transaction is missing record writes");
+  }
+  if (!instructions[0]?.programId.equals(ComputeBudgetProgram.programId)) {
+    throw new Error("ANS publish transaction must start with a compute budget instruction");
+  }
+  const forbidden = skrProgramId?.toBase58();
+  const allowed = new Set([
+    ComputeBudgetProgram.programId.toBase58(),
+    ANS_PROGRAM_ID,
+    SystemProgram.programId.toBase58(),
+  ]);
+  for (const ix of instructions) {
+    const id = ix.programId.toBase58();
+    if (forbidden && id === forbidden) {
+      throw new Error("ANS-only publish must not include the custom SKR program");
+    }
+    if (!allowed.has(id)) {
+      throw new Error(`Unexpected program in ANS-only publish: ${id}`);
+    }
+  }
+  if (!instructions.some((ix) => ix.programId.toBase58() === ANS_PROGRAM_ID)) {
+    throw new Error("ANS-only publish is missing AllDomains record instructions");
+  }
+}
+
+export async function signAndSendAnsPublishTx(params: {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  wallet: WalletSigner;
+  payload: PublishPayload;
+}) {
+  return withRpcFailover(params.rpcUrls ?? params.rpcUrl, async (connection) => {
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    const recordIxs = await createAnsRecordWriteInstructions({
+      connection,
+      owner: params.wallet.publicKey,
+      payload: params.payload,
+    });
+    const instructions = assembleAnsOnlyPublishInstructions(recordIxs);
+    const skrProgramId = process.env.NEXT_PUBLIC_SKR_PROGRAM_ID?.trim()
+      ? new PublicKey(process.env.NEXT_PUBLIC_SKR_PROGRAM_ID)
+      : undefined;
+    assertAnsOnlyPublishInstructions(instructions, skrProgramId);
+
+    const message = new TransactionMessage({
+      payerKey: params.wallet.publicKey,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    const signed = await params.wallet.signTransaction(tx);
+    const sig = await connection.sendTransaction(signed, { maxRetries: 3 });
+    await connection.confirmTransaction(sig, "confirmed");
+    return sig;
+  });
+}
+
 export async function signAndSendPublishTx(params: {
   rpcUrl?: string;
   rpcUrls?: string[];
