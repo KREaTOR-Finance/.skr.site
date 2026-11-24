@@ -13,7 +13,7 @@ import {
 describe("studio blocks", () => {
   it("starts from a Seeker ID card with identity, SKR, links, and about", () => {
     const blocks = defaultCardBlocks("thomas");
-    expect(blocks.map((block) => block.type)).toEqual(["identity", "skr", "links", "about"]);
+    expect(blocks.map((block) => block.type)).toEqual(["identity", "stamps", "skr", "shop", "links", "about"]);
     expect(siteDomain(blocks)).toBe("thomas.skr");
   });
 
@@ -45,7 +45,7 @@ describe("studio blocks", () => {
   });
 
   it("requires a .skr name before publish", () => {
-    expect(validateBlocks(defaultCardBlocks(""))[0]).toMatch(/Identity/i);
+    expect(validateBlocks(defaultCardBlocks(""))[0]).toMatch(/Passport/i);
     expect(validateBlocks(defaultCardBlocks("you"))).toEqual([]);
   });
 
@@ -57,6 +57,9 @@ describe("studio blocks", () => {
     expect(html).toContain("you.skr");
     expect(html).toContain("data-skr-live=");
     expect(html).toContain("/api/skr-profile");
+    expect(html).toContain("data-stamps-live=");
+    expect(html).not.toMatch(/data-skr-field="[^"]*">—/);
+    expect(html).toContain('setAttribute("hidden"');
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
   });

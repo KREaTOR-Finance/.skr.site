@@ -9,14 +9,16 @@ import {
   registerMwa,
 } from "@solana-mobile/wallet-standard-mobile";
 import { signAndSendAnsPublishTx, toUserFacingChainError } from "@/app/lib/chain";
-import { createContentUriAndHash } from "@/app/lib/publish";
 import { formatSkr, type SkrProfile } from "@/app/lib/skrProfile";
+import { SKR_UNLOCK_AMOUNT_UI } from "@/app/lib/sharedSpec";
+import { htmlUnlockReady, type ShopItem } from "@/app/lib/solanaPay";
+import { uploadSiteOrHtml } from "@/app/lib/uploadSite";
 import {
   BLOCK_META,
-  BLOCK_PAGE_TEMPLATE_ID,
   MAX_FAQ,
   MAX_GALLERY,
   MAX_LINKS,
+  MAX_SHOP_ITEMS,
   TINTS,
   addBlock,
   addableTypes,
@@ -51,6 +53,8 @@ import {
   updatePageSlug,
   validateSite,
   writeSiteDraft,
+  customHtmlPublishError,
+  sitePublishTemplateId,
   type SitePage,
   type StudioSite,
 } from "@/app/lib/sitePages";
@@ -84,7 +88,11 @@ export default function StudioApp() {
 
   const activePage = site.pages.find((page) => page.id === activePageId) ?? homePage(site);
   const domain = useMemo(() => siteDomainName(site), [site]);
-  const errors = useMemo(() => validateSite(site), [site]);
+  const errors = useMemo(() => {
+    const next = validateSite(site);
+    const htmlError = customHtmlPublishError(site, profile);
+    return htmlError ? [...next, htmlError] : next;
+  }, [site, profile]);
   const blocks = activePage?.blocks ?? [];
   const canAdd = addableTypes(blocks);
   const previewHtml = useMemo(
@@ -221,19 +229,20 @@ export default function StudioApp() {
         isSeeker: profile?.isSeeker,
       });
       const pageDomain = siteDomainName(site);
-      const uploaded = await uploadSiteOrHtml(files, pageDomain);
+      const templateId = sitePublishTemplateId(site);
+      const uploaded = await uploadSiteOrHtml(files, pageDomain, { templateId });
       const signature = await signAndSendAnsPublishTx({
         rpcUrls: MAINNET_RPC_URLS,
         wallet,
         payload: {
           domain: pageDomain,
-          templateId: BLOCK_PAGE_TEMPLATE_ID,
+          templateId,
           contentUri: uploaded.contentUri,
           contentHash: uploaded.contentHash,
           isPremium: false,
           metadata: {
             source: "skr-studio-site-v2",
-            template: BLOCK_PAGE_TEMPLATE_ID,
+            template: templateId,
             url: uploaded.publicUrl,
             ...uploaded.metadataRecords,
             ...(siteIdentityPhoto(site) ? { pic: siteIdentityPhoto(site) } : {}),
@@ -316,6 +325,7 @@ export default function StudioApp() {
             <button type="button" className={tab === "preview" ? "on" : ""} onClick={() => setTab("preview")}>Preview site</button>
           </div>
 
+          <div className="editor-scroll">
           {tab === "edit" && (
             <>
               <h3 className="block-heading">Pages</h3>
@@ -346,11 +356,13 @@ export default function StudioApp() {
 
               <PageSettings
                 page={activePage}
+                htmlUnlocked={htmlUnlockReady(profile)}
                 onRename={(title) => setSite(renamePage(site, activePage.id, title))}
                 onSlug={(slug) => setSite(updatePageSlug(site, activePage.id, slug))}
                 onNav={(inNav) => setSite(setPageInNav(site, activePage.id, inNav))}
                 onDescription={(description) => setSite(updatePage(site, { ...activePage, description }))}
                 onShareImage={(shareImage) => setSite(updatePage(site, { ...activePage, shareImage }))}
+                onCustomHtml={(customHtml) => setSite(updatePage(site, { ...activePage, customHtml }))}
                 onMove={(direction) => setSite(movePage(site, activePage.id, direction))}
                 onRemove={() => {
                   const next = removePage(site, activePage.id);
@@ -360,6 +372,8 @@ export default function StudioApp() {
               />
 
               {activePage.kind === "home" && <MiniPreview blocks={blocks} profile={profile} domain={domain} />}
+              {activePage.customHtml === undefined && (
+              <>
 
               <h3 className="block-heading">Blocks on {activePage.title}</h3>
               <div className="block-list">
@@ -413,12 +427,15 @@ export default function StudioApp() {
               >
                 Update blocks from prompt
               </button>
+              </>
+              )}
             </>
           )}
 
           {tab === "preview" && (
             <iframe className="site-preview-frame" title="Site preview" sandbox="allow-scripts" srcDoc={previewHtml} />
           )}
+          </div>
 
           <div className="studio-bar">
             <button className="btn btn-ghost" type="button" onClick={() => setTab(tab === "preview" ? "edit" : "preview")}>
@@ -458,7 +475,7 @@ export default function StudioApp() {
             {isPublishing ? "Publishing..." : "Review in Seed Vault"}
           </button>
           <button className="btn btn-ghost" type="button" onClick={() => setScreen("editor")}>Back to editor</button>
-          <p className="fine-print">Custom HTML is a separate, paid advanced path and is not used here.</p>
+          <p className="fine-print">The base site and block pages stay free. Custom HTML is a 1000 SKR path and publishes with the same hosted name.skr.site bundle.</p>
         </section>
       )}
 
@@ -497,34 +514,6 @@ function siteIdentityPhoto(site: StudioSite): string {
   return identityBlock(homePage(site).blocks).photoUrl;
 }
 
-async function uploadSiteOrHtml(files: ReturnType<typeof renderSiteBundle>, domain: string) {
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      domain,
-      templateId: BLOCK_PAGE_TEMPLATE_ID,
-      files: files.map((file) => ({ path: file.path, content: file.content, contentType: file.contentType })),
-    }),
-  });
-  if (response.ok) {
-    const parsed = await response.json() as { contentUri: string; publicUrl: string; contentHash?: string; metadataRecords: Record<string, string> };
-    if (parsed.contentUri && parsed.publicUrl && parsed.metadataRecords) {
-      return {
-        contentUri: parsed.contentUri,
-        publicUrl: parsed.publicUrl.endsWith("/") ? parsed.publicUrl : `${parsed.publicUrl}/`,
-        contentHash: parsed.contentHash ?? "",
-        metadataRecords: parsed.metadataRecords,
-      };
-    }
-  }
-  // Fallback keeps single-file upload available if the bundle endpoint isn't configured yet.
-  const home = files.find((file) => file.path === "index.html");
-  if (!home) throw new Error(await response.text() || "Upload failed");
-  const uploaded = await createContentUriAndHash(home.content, { domain, templateId: BLOCK_PAGE_TEMPLATE_ID });
-  return uploaded;
-}
-
 function blockSummary(block: SiteBlock, profile: SkrProfile | null): string {
   switch (block.type) {
     case "identity":
@@ -536,6 +525,10 @@ function blockSummary(block: SiteBlock, profile: SkrProfile | null): string {
       return `${block.items.filter((item) => item.label || item.url).length} of ${MAX_LINKS}`;
     case "skr":
       return block.enabled ? (profile ? `${formatSkr(profile.total)} SKR · on` : "Live on-chain · on") : "Hidden";
+    case "stamps":
+      return block.enabled ? "Auto from this wallet · on" : "Hidden";
+    case "shop":
+      return `${block.items.filter((item) => item.title.trim()).length} of ${MAX_SHOP_ITEMS}`;
     case "image":
       return block.url ? "Image added" : BLOCK_META.image.hint;
     case "gallery":
@@ -570,9 +563,10 @@ function MiniPreview({ blocks, profile, domain }: { blocks: SiteBlock[]; profile
       <span className="chip">{domain || "your.skr"}</span>
       <h2>{identity.name || "your"}.skr</h2>
       <p>{identity.tagline || "Seeker ID"}</p>
-      {skr?.type === "skr" && skr.enabled && (
+      <p className="bound-note">One Seeker, one name</p>
+      {skr?.type === "skr" && skr.enabled && profile && (
         <div className="seeker-id-total">
-          <strong>{profile ? formatSkr(profile.total) : "—"}</strong>
+          <strong>{formatSkr(profile.total)}</strong>
           <span>SKR</span>
         </div>
       )}
@@ -582,14 +576,16 @@ function MiniPreview({ blocks, profile, domain }: { blocks: SiteBlock[]; profile
 }
 
 function PageSettings({
-  page, onRename, onSlug, onNav, onDescription, onShareImage, onMove, onRemove,
+  page, htmlUnlocked, onRename, onSlug, onNav, onDescription, onShareImage, onCustomHtml, onMove, onRemove,
 }: {
   page: SitePage;
+  htmlUnlocked: boolean;
   onRename: (title: string) => void;
   onSlug: (slug: string) => void;
   onNav: (inNav: boolean) => void;
   onDescription: (description: string) => void;
   onShareImage: (url: string) => void;
+  onCustomHtml: (html: string) => void;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
 }) {
@@ -611,6 +607,22 @@ function PageSettings({
         Share image URL
         <input value={page.shareImage} onChange={(event) => onShareImage(event.target.value)} placeholder="https://" />
       </label>
+      {page.customHtml !== undefined && page.kind !== "home" && (
+        <label className="field html-editor">
+          Custom HTML ({SKR_UNLOCK_AMOUNT_UI} SKR path)
+          <textarea
+            value={page.customHtml}
+            onChange={(event) => onCustomHtml(event.target.value)}
+            rows={12}
+            placeholder="<!doctype html>…"
+          />
+          <span className="html-locked">
+            {htmlUnlocked
+              ? "This page publishes as your raw HTML in the same hosted name.skr.site bundle. Home still ships with the passport."
+              : `Hold at least ${SKR_UNLOCK_AMOUNT_UI} SKR to publish custom HTML. You can still draft it here. The on-chain HTML unlock program is not on mainnet yet, so this checks that this wallet holds ${SKR_UNLOCK_AMOUNT_UI} SKR.`}
+          </span>
+        </label>
+      )}
       {page.kind !== "home" && (
         <div className="row">
           <label className="skr-toggle">
@@ -730,6 +742,97 @@ function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (items: Fa
   );
 }
 
+
+function ShopEditor({ items, onChange }: { items: ShopItem[]; onChange: (items: ShopItem[]) => void }) {
+  const rows = items.length < MAX_SHOP_ITEMS
+    ? [...items, { title: "", price: 0, currency: "SKR" as const, image: "", description: "", delivery: "" }]
+    : items;
+  return (
+    <div className="shop-editor">
+      {rows.slice(0, MAX_SHOP_ITEMS).map((item, index) => (
+        <div className="shop-item-edit" key={`shop-${index}`}>
+          <label className="field">
+            Title
+            <input
+              value={item.title}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), title: event.target.value };
+                onChange(next.filter((entry) => entry.title.trim() || entry.price > 0 || entry.description.trim() || entry.image || entry.delivery));
+              }}
+            />
+          </label>
+          <div className="row">
+            <label className="field compact">
+              Price
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={item.price || ""}
+                onChange={(event) => {
+                  const next = [...items];
+                  next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), price: Number(event.target.value) };
+                  onChange(next.filter((entry) => entry.title.trim() || entry.price > 0 || entry.description.trim() || entry.image || entry.delivery));
+                }}
+              />
+            </label>
+            <label className="field compact">
+              Currency
+              <select
+                value={item.currency}
+                onChange={(event) => {
+                  const next = [...items];
+                  next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), currency: event.target.value === "SOL" ? "SOL" : "SKR" };
+                  onChange(next);
+                }}
+              >
+                <option value="SKR">SKR</option>
+                <option value="SOL">SOL</option>
+              </select>
+            </label>
+          </div>
+          <label className="field">
+            Image URL
+            <input
+              value={item.image}
+              placeholder="https://"
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), image: event.target.value };
+                onChange(next.filter((entry) => entry.title.trim() || entry.price > 0 || entry.description.trim() || entry.image || entry.delivery));
+              }}
+            />
+          </label>
+          <label className="field">
+            Description
+            <textarea
+              value={item.description}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), description: event.target.value };
+                onChange(next.filter((entry) => entry.title.trim() || entry.price > 0 || entry.description.trim() || entry.image || entry.delivery));
+              }}
+            />
+          </label>
+          <label className="field">
+            Delivery link or note
+            <input
+              value={item.delivery}
+              placeholder="https:// or a short note"
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { title: "", price: 0, currency: "SKR", image: "", description: "", delivery: "" }), delivery: event.target.value };
+                onChange(next.filter((entry) => entry.title.trim() || entry.price > 0 || entry.description.trim() || entry.image || entry.delivery));
+              }}
+            />
+          </label>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: SiteBlock) => void }) {
   switch (block.type) {
     case "identity":
@@ -739,6 +842,7 @@ function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: 
             .skr name
             <input value={block.name} onChange={(event) => onChange({ ...block, name: event.target.value.replace(/\.skr$/i, "") })} placeholder="yourname" />
           </label>
+          <p className="html-locked">This .skr is bound to the wallet. One Seeker, one name. It can’t be sold or transferred.</p>
           <label className="field">
             Tagline
             <input value={block.tagline} onChange={(event) => onChange({ ...block, tagline: event.target.value })} />
@@ -767,6 +871,15 @@ function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: 
           Show live SKR totals on the public page
         </label>
       );
+    case "stamps":
+      return (
+        <label className="skr-toggle">
+          <input type="checkbox" checked={block.enabled} onChange={(event) => onChange({ ...block, enabled: event.target.checked })} />
+          Show auto-stamps from this wallet’s public on-chain activity
+        </label>
+      );
+    case "shop":
+      return <ShopEditor items={block.items} onChange={(items) => onChange({ ...block, items })} />;
     case "image":
       return (
         <>

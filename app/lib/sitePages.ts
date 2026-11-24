@@ -23,6 +23,9 @@ import {
   type SiteLink,
   type StudioDraft,
 } from "./siteBlocks";
+import { stampsLiveScript } from "./stamps";
+import { HTML_TEMPLATE_ID, SKR_UNLOCK_AMOUNT_UI } from "./sharedSpec";
+import { htmlUnlockReady } from "./solanaPay";
 
 export type SitePageKind = "home" | "page" | "post";
 
@@ -35,6 +38,7 @@ export type SitePage = {
   description: string;
   shareImage: string;
   blocks: SiteBlock[];
+  customHtml?: string;
 };
 
 export type StudioSite = {
@@ -55,6 +59,8 @@ export const PAGE_STARTERS: { id: string; title: string; kind: SitePageKind; slu
   { id: "blog", title: "Blog", kind: "page", slug: "blog", blocks: ["richtext", "posts"] },
   { id: "gallery", title: "Gallery", kind: "page", slug: "gallery", blocks: ["gallery"] },
   { id: "contact", title: "Contact", kind: "page", slug: "contact", blocks: ["richtext", "contact"] },
+  { id: "shop", title: "Shop", kind: "page", slug: "shop", blocks: ["shop", "richtext"] },
+  { id: "html", title: "Custom HTML", kind: "page", blocks: [] },
   { id: "post", title: "Post", kind: "post", blocks: ["richtext", "image"] },
 ];
 
@@ -190,6 +196,7 @@ export function addPage(
     description: "",
     shareImage: "",
     blocks: starter.blocks.map((type) => createBlock(type)),
+    ...(starter.id === "html" ? { customHtml: "" } : {}),
   };
   return { ...site, pages: [...site.pages, page] };
 }
@@ -277,8 +284,26 @@ export function validateSite(site: StudioSite): string[] {
     slugs.add(page.slug);
     if (page.kind !== "home") errors.push(...validateBlocks(page.blocks, { requireIdentity: false }));
     if (page.shareImage && !sanitizeHref(page.shareImage)) errors.push(`“${page.title}” share image must be an http(s) URL`);
+    if (page.kind === "home" && page.customHtml?.trim()) errors.push("Home keeps the passport, so custom HTML can’t replace it");
+    if (page.kind !== "home" && page.customHtml !== undefined && !page.customHtml.trim()) {
+      errors.push(`“${page.title}” needs custom HTML before publish`);
+    }
   }
   return errors;
+}
+
+export function siteHasCustomHtml(site: StudioSite): boolean {
+  return site.pages.some((page) => page.kind !== "home" && Boolean(page.customHtml?.trim()));
+}
+
+export function customHtmlPublishError(site: StudioSite, profile: { total?: number; liquid?: number } | null): string | null {
+  if (!siteHasCustomHtml(site)) return null;
+  if (htmlUnlockReady(profile)) return null;
+  return `Custom HTML is a ${SKR_UNLOCK_AMOUNT_UI} SKR path. Hold at least ${SKR_UNLOCK_AMOUNT_UI} SKR to publish it.`;
+}
+
+export function sitePublishTemplateId(site: StudioSite): string {
+  return siteHasCustomHtml(site) ? HTML_TEMPLATE_ID : BLOCK_PAGE_TEMPLATE_ID;
 }
 
 export function postLinks(site: StudioSite): SiteLink[] {
@@ -287,7 +312,7 @@ export function postLinks(site: StudioSite): SiteLink[] {
     .map((page) => ({ label: page.title, url: `/${page.slug}` }));
 }
 
-function navMarkup(site: StudioSite, current: SitePage, domain: string): string {
+function navMarkup(site: StudioSite, current: SitePage, _domain: string): string {
   const links = navPages(site).filter((page) => page.kind !== "home");
   const collapse = links.length > 4;
   const items = links.map((page) => {
@@ -319,10 +344,14 @@ export function renderPageHtml(
   const description = page.description.trim()
     || (page.kind === "home" ? identity.tagline : page.title);
   const shareImage = sanitizeHref(page.shareImage) || sanitizeHref(identity.photoUrl);
+  if (page.kind !== "home" && page.customHtml?.trim()) {
+    return page.customHtml.trim();
+  }
   const inner = renderBlocksInnerHtml(page.blocks, {
     wallet: options.wallet,
     profileUrl: options.profileUrl,
     isSeeker: options.isSeeker,
+    passport: page.kind === "home",
     postLinks: postLinks(site),
     resolveHref: (href) => {
       const slug = href.replace(/^\//, "").replace(/\/$/, "");
@@ -359,6 +388,7 @@ export function renderPageHtml(
     ${inner}
   </main>
   ${skrLiveScript(options.wallet)}
+  ${options.wallet ? stampsLiveScript() : ""}
 </body>
 </html>`;
 }
@@ -446,12 +476,20 @@ export function demoCreatorSite(): StudioSite {
     if (block.type === "links") {
       return { ...block, items: [
         { label: "Projects", url: "/projects" },
+        { label: "Shop", url: "/shop" },
         { label: "About", url: "/about" },
         { label: "Contact", url: "/contact" },
       ] };
     }
+    if (block.type === "shop") {
+      return { ...block, items: [
+        { title: "1:1 Studio hour", price: 40, currency: "SKR", image: "", description: "A booked hour with the owner.", delivery: "Scheduled by email after payment." },
+        { title: "Icon pack", price: 2, currency: "SOL", image: "", description: "Instant digital drop.", delivery: "https://skr.site" },
+      ] };
+    }
     return block;
   }));
+  site = addPage(site, { starterId: "shop", title: "Shop" });
   site = addPage(site, { starterId: "about", title: "About" });
   site = addPage(site, { starterId: "projects", title: "Projects" });
   site = addPage(site, { starterId: "blog", title: "Blog" });
@@ -474,6 +512,15 @@ export function demoCreatorSite(): StudioSite {
       { id: projects.blocks[2].id, type: "cta", label: "Get in touch", url: "/contact" },
     ],
   });
+
+  const shopPage = bySlug("shop");
+  site = updatePageBlocks(site, shopPage.id, [
+    { id: shopPage.blocks[0].id, type: "shop", items: [
+      { title: "1:1 Studio hour", price: 40, currency: "SKR", image: "", description: "A booked hour with the owner. Paid in SKR, sent to their wallet.", delivery: "Scheduled by email after payment." },
+      { title: "Icon pack", price: 2, currency: "SOL", image: "", description: "Instant digital drop. 2 SOL, same wallet, no platform cut.", delivery: "https://skr.site" },
+    ] },
+    { id: shopPage.blocks[1].id, type: "richtext", text: "Payment goes straight to this wallet with a Solana Pay transfer. No platform cut." },
+  ]);
 
   const contact = bySlug("contact");
   site = updatePageBlocks(site, contact.id, [

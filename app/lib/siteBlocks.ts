@@ -1,9 +1,13 @@
+import { SKR_PROFILE_API, stampsLiveScript } from "./stamps";
+import { formatPayAmount, solanaPayQrSvg, solanaPayTransferUrl } from "./solanaPay";
 export type SiteBlockType =
   | "identity"
   | "about"
   | "richtext"
   | "links"
   | "skr"
+  | "stamps"
+  | "shop"
   | "image"
   | "gallery"
   | "embed"
@@ -38,6 +42,16 @@ export type ContactBlock = { id: string; type: "contact"; email: string; buttonL
 export type PostsBlock = { id: string; type: "posts"; heading: string };
 export type SocialsBlock = { id: string; type: "socials"; items: SiteLink[] };
 export type FaqBlock = { id: string; type: "faq"; items: FaqItem[] };
+export type StampsBlock = { id: string; type: "stamps"; enabled: boolean };
+export type ShopItem = {
+  title: string;
+  price: number;
+  currency: "SKR" | "SOL";
+  image: string;
+  description: string;
+  delivery: string;
+};
+export type ShopBlock = { id: string; type: "shop"; items: ShopItem[] };
 
 export type SiteBlock =
   | IdentityBlock
@@ -52,7 +66,9 @@ export type SiteBlock =
   | ContactBlock
   | PostsBlock
   | SocialsBlock
-  | FaqBlock;
+  | FaqBlock
+  | StampsBlock
+  | ShopBlock;
 
 export type PageStarter = "card" | "profile" | "links" | "project" | "shop" | "event" | "prompt";
 
@@ -60,6 +76,7 @@ export const BLOCK_PAGE_TEMPLATE_ID = "studio";
 export const MAX_LINKS = 5;
 export const MAX_GALLERY = 8;
 export const MAX_FAQ = 8;
+export const MAX_SHOP_ITEMS = 8;
 export const STUDIO_DRAFT_KEY = "skr:studio-blocks:v1";
 export const STUDIO_SITE_DRAFT_KEY = "skr:studio-site:v2";
 
@@ -70,7 +87,7 @@ export const TINTS = [
 ] as const;
 
 const ADDABLE: SiteBlockType[] = [
-  "richtext", "links", "skr", "image", "gallery", "embed", "cta", "contact", "posts", "socials", "faq",
+  "richtext", "links", "skr", "stamps", "shop", "image", "gallery", "embed", "cta", "contact", "posts", "socials", "faq",
 ];
 
 export const EMBED_HOSTS = [
@@ -96,6 +113,10 @@ export function createBlock(type: SiteBlockType): SiteBlock {
       return { id: newId(), type, items: [] };
     case "skr":
       return { id: newId(), type, enabled: true };
+    case "stamps":
+      return { id: newId(), type, enabled: true };
+    case "shop":
+      return { id: newId(), type, items: [] };
     case "image":
       return { id: newId(), type, url: "", alt: "" };
     case "gallery":
@@ -124,7 +145,9 @@ function withName(blocks: SiteBlock[], name: string): SiteBlock[] {
 export function defaultCardBlocks(name = ""): SiteBlock[] {
   return withName([
     createBlock("identity"),
+    createBlock("stamps"),
     createBlock("skr"),
+    createBlock("shop"),
     createBlock("links"),
     createBlock("about"),
   ], name);
@@ -140,7 +163,7 @@ export function starterBlocks(starter: PageStarter, name = ""): SiteBlock[] {
     case "project":
       return labeled(["identity", "about", "image", "cta", "links"]);
     case "shop":
-      return labeled(["identity", "about", "image", "cta", "links"]);
+      return labeled(["identity", "shop", "about", "cta", "links"]);
     case "event":
       return labeled(["identity", "about", "cta", "links", "image"]);
     case "prompt":
@@ -276,7 +299,7 @@ export function validateBlocks(blocks: SiteBlock[], options: { requireIdentity?:
   if (requireIdentity || hasIdentity) {
     const identity = identityBlock(blocks);
     const label = identity.name.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-    if (requireIdentity && !label) errors.push("Add your .skr name in the Identity block");
+    if (requireIdentity && !label) errors.push("Add your .skr name in the Passport block");
     if (identity.photoUrl && !sanitizeHref(identity.photoUrl)) errors.push("Photo URL must start with http or https");
     if (identity.tagline.length > 140) errors.push("Tagline should be under 140 characters");
   }
@@ -310,6 +333,16 @@ export function validateBlocks(blocks: SiteBlock[], options: { requireIdentity?:
     }
     if (block.type === "faq" && block.items.length > MAX_FAQ) {
       errors.push(`FAQ can have up to ${MAX_FAQ} questions`);
+    }
+    if (block.type === "shop") {
+      if (block.items.length > MAX_SHOP_ITEMS) errors.push(`Shop can have up to ${MAX_SHOP_ITEMS} items`);
+      for (const item of block.items) {
+        if (!item.title.trim() && !item.price) continue;
+        if (!item.title.trim()) errors.push("Each shop item needs a title");
+        if (!Number.isFinite(item.price) || item.price <= 0) errors.push(`“${item.title || "Item"}” needs a price above zero`);
+        if (item.currency !== "SKR" && item.currency !== "SOL") errors.push("Shop prices must be in SKR or SOL");
+        if (item.image && !sanitizeHref(item.image)) errors.push("Shop images must use http or https URLs");
+      }
     }
   }
   return errors;
@@ -432,6 +465,7 @@ export type RenderOptions = {
   wallet?: string;
   profileUrl?: string;
   isSeeker?: boolean;
+  passport?: boolean;
   resolveHref?: (href: string) => string;
   postLinks?: SiteLink[];
 };
@@ -450,8 +484,8 @@ export function renderBlocksInnerHtml(blocks: SiteBlock[], options: RenderOption
   const name = escapeHtml(identity.name.trim() || "your");
   const photo = sanitizeHref(identity.photoUrl);
   const wallet = options.wallet ?? "";
-  const profileApi = options.profileUrl ?? "https://skr.site/api/skr-profile";
-  const badge = options.isSeeker ? `<span class="badge">SEEKER</span>` : "";
+  const profileApi = options.profileUrl ?? SKR_PROFILE_API;
+  const badge = options.isSeeker ? `<span class="badge">Seeker-verified</span>` : "";
 
   const photoTag = photo
     ? `<div class="avatar-wrap"><img class="photo" src="${escapeHtml(photo)}" alt="" />${badge}</div>`
@@ -459,8 +493,12 @@ export function renderBlocksInnerHtml(blocks: SiteBlock[], options: RenderOption
 
   return blocks.map((block) => {
     switch (block.type) {
-      case "identity":
-        return `<header class="identity">${photoTag}<p class="kicker">${escapeHtml(domain)}</p><h1>${name}<span class="dot">.skr</span></h1><p class="tagline">${tagline}</p></header>`;
+      case "identity": {
+        const bound = options.passport
+          ? `<p class="bound">One Seeker, one name. This .skr is bound to the wallet.</p>`
+          : "";
+        return `<header class="identity${options.passport ? " passport" : ""}">${photoTag}<p class="kicker">${escapeHtml(domain)}</p><h1>${name}<span class="dot">.skr</span></h1><p class="tagline">${tagline}</p>${bound}</header>`;
+      }
       case "about":
         return block.text.trim() ? `<section class="about"><h2>About</h2><p>${escapeHtml(block.text)}</p></section>` : "";
       case "richtext":
@@ -471,18 +509,26 @@ export function renderBlocksInnerHtml(blocks: SiteBlock[], options: RenderOption
         return `<nav class="links">${items.map((item) => `<a class="btn" href="${escapeHtml(item.url)}">${escapeHtml(item.label || item.url)}</a>`).join("")}</nav>`;
       }
       case "skr":
-        if (!block.enabled) return "";
-        return `<section class="skr" data-skr-live="${escapeHtml(wallet)}" data-skr-api="${escapeHtml(profileApi)}">
+        if (!block.enabled || !wallet) return "";
+        return `<section class="skr" hidden data-skr-live="${escapeHtml(wallet)}" data-skr-api="${escapeHtml(profileApi)}">
           <p class="skr-label">Live SKR position</p>
-          <p class="skr-total"><strong data-skr-field="total">—</strong><span>SKR</span></p>
+          <p class="skr-total"><strong data-skr-field="total"></strong><span>SKR</span></p>
           <div class="skr-grid">
-            <div><b>Liquid</b><span data-skr-field="liquid">—</span></div>
-            <div><b>Staked</b><span data-skr-field="staked">—</span></div>
-            <div><b>Yield</b><span data-skr-field="yieldEarned">—</span></div>
-            <div><b>Unstaking</b><span data-skr-field="unstaking">—</span></div>
-            <div><b>Guardian</b><span data-skr-field="guardian">—</span></div>
+            <div><b>Liquid</b><span data-skr-field="liquid"></span></div>
+            <div><b>Staked</b><span data-skr-field="staked"></span></div>
+            <div><b>Yield</b><span data-skr-field="yieldEarned"></span></div>
+            <div><b>Unstaking</b><span data-skr-field="unstaking"></span></div>
+            <div><b>Guardian</b><span data-skr-field="guardian"></span></div>
           </div>
         </section>`;
+      case "stamps":
+        if (!block.enabled || !wallet) return "";
+        return `<section class="stamps" hidden data-stamps-live="${escapeHtml(wallet)}" data-stamps-api="${escapeHtml(profileApi)}">
+          <h2>Stamps</h2>
+          <div class="stamp-grid" data-stamps-grid></div>
+        </section>`;
+      case "shop":
+        return renderShopBlock(block, options);
       case "image":
         return sanitizeHref(block.url)
           ? `<figure class="shot"><img src="${escapeHtml(sanitizeHref(block.url))}" alt="${escapeHtml(block.alt)}" /></figure>`
@@ -531,6 +577,45 @@ export function renderBlocksInnerHtml(blocks: SiteBlock[], options: RenderOption
   }).join("\n");
 }
 
+
+function renderShopBlock(block: ShopBlock, options: RenderOptions): string {
+  const items = block.items
+    .filter((item) => item.title.trim() && Number.isFinite(item.price) && item.price > 0 && (item.currency === "SKR" || item.currency === "SOL"))
+    .slice(0, MAX_SHOP_ITEMS);
+  if (!items.length) return "";
+  const wallet = options.wallet ?? "";
+  const cards = items.map((item) => {
+    const title = escapeHtml(item.title.trim());
+    const desc = item.description.trim() ? `<p>${escapeHtml(item.description.trim())}</p>` : "";
+    const image = sanitizeHref(item.image);
+    const img = image ? `<img src="${escapeHtml(image)}" alt="" />` : "";
+    const amount = formatPayAmount(item.price);
+    const price = `${escapeHtml(amount)} ${item.currency}`;
+    const href = wallet ? solanaPayTransferUrl({
+      recipient: wallet,
+      amount: item.price,
+      currency: item.currency,
+      label: item.title.trim(),
+      message: item.description.trim() || item.title.trim(),
+      memo: item.title.trim().slice(0, 32),
+    }) : "";
+    const qr = href ? solanaPayQrSvg(href) : "";
+    const pay = href
+      ? `<div class="shop-pay"><span class="price">${price}</span><a href="${escapeHtml(href)}">Pay with Solana Pay</a>${qr ? `<div class="shop-pay-qr qr">${qr}</div>` : ""}</div>`
+      : `<div class="shop-pay"><span class="price">${price}</span></div>`;
+    const deliveryRaw = item.delivery.trim();
+    const deliveryHref = sanitizeHref(deliveryRaw) || (deliveryRaw.startsWith("/") ? sanitizeLink(deliveryRaw) : "");
+    const delivery = deliveryRaw
+      ? (deliveryHref ? `<p class="shop-note">Delivery: <a href="${escapeHtml(deliveryHref)}">${escapeHtml(deliveryRaw)}</a></p>` : `<p class="shop-note">Delivery: ${escapeHtml(deliveryRaw)}</p>`)
+      : "";
+    return `<article class="shop-item">${img}<div class="body"><h3>${title}</h3>${desc}${pay}${delivery}</div></article>`;
+  }).join("");
+  const note = wallet
+    ? `<p class="shop-note">Payment goes straight to this wallet. No platform cut.</p>`
+    : `<p class="shop-note">The owner has not connected a wallet for checkout yet.</p>`;
+  return `<section class="shop"><h2>Shop</h2>${cards}${note}</section>`;
+}
+
 function formatRichText(text: string): string {
   const escaped = escapeHtml(text.trim());
   const withBreaks = escaped.split(/\n{2,}/).map((para) => `<p>${para.replaceAll("\n", "<br />")}</p>`).join("");
@@ -544,13 +629,22 @@ export function skrLiveScript(wallet?: string): string {
   var root=document.querySelector("[data-skr-live]");
   if(!root) return;
   var wallet=root.getAttribute("data-skr-live");
-  var api=root.getAttribute("data-skr-api")||"https://skr.site/api/skr-profile";
-  function fmt(n){ if(!isFinite(n)||n===0) return "0"; return n>=1000?n.toLocaleString("en-US",{maximumFractionDigits:1}):n.toLocaleString("en-US",{maximumFractionDigits:2}); }
+  var api=root.getAttribute("data-skr-api")||"${SKR_PROFILE_API}";
+  function hide(){ root.setAttribute("hidden","hidden"); root.classList.remove("is-ready"); }
+  function show(){ root.removeAttribute("hidden"); root.classList.add("is-ready"); }
+  if(!wallet){ hide(); return; }
+  function fmt(n){ if(!isFinite(n)) return null; if(n===0) return "0"; return n>=1000?n.toLocaleString("en-US",{maximumFractionDigits:1}):n.toLocaleString("en-US",{maximumFractionDigits:2}); }
   function short(v){ return !v||v==="None"? "None" : (v.length<10?v:v.slice(0,4)+"…"+v.slice(-4)); }
-  fetch(api+"?wallet="+encodeURIComponent(wallet),{cache:"no-store"}).then(function(r){return r.json()}).then(function(d){
+  fetch(api+"?wallet="+encodeURIComponent(wallet),{cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("profile");
+    return r.json();
+  }).then(function(d){
+    if(!d||typeof d.total!=="number") throw new Error("profile");
     var map={total:fmt(d.total),liquid:fmt(d.liquid),staked:fmt(d.staked),yieldEarned:fmt(d.yieldEarned),unstaking:fmt(d.unstaking),guardian:short(d.guardian)};
-    Object.keys(map).forEach(function(k){ var el=root.querySelector('[data-skr-field="'+k+'"]'); if(el) el.textContent=map[k]; });
-  }).catch(function(){});
+    if(!map.total) throw new Error("profile");
+    Object.keys(map).forEach(function(k){ var el=root.querySelector('[data-skr-field="'+k+'"]'); if(el&&map[k]!=null) el.textContent=map[k]; });
+    show();
+  }).catch(hide);
 })();
 </script>`;
 }
@@ -609,7 +703,28 @@ export function sitePageCss(tint: string): string {
     .socials { margin-top:18px; text-align:center; }
     .socials a { color:var(--teal); text-decoration:none; }
     h2 { font-size:.95rem; letter-spacing:.08em; text-transform:uppercase; color:var(--chrome); }
-    .page-title { margin:18px 0 8px; font-size:clamp(1.8rem,7vw,2.6rem); letter-spacing:-.04em; }`;
+    .page-title { margin:18px 0 8px; font-size:clamp(1.8rem,7vw,2.6rem); letter-spacing:-.04em; }
+    .bound { margin:0 0 8px; color:var(--teal); font-size:.78rem; font-weight:700; letter-spacing:.02em; }
+    .badge { white-space:nowrap; }
+    .skr[hidden], .stamps[hidden] { display:none; }
+    .stamps { margin:16px 0; }
+    .stamp-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .stamp { border:1px solid rgba(190,190,190,.2); border-radius:14px; padding:10px; background:rgba(255,255,255,.04); }
+    .stamp i { display:grid; place-items:center; width:22px; height:22px; border-radius:7px; background:rgba(0,201,167,.16); color:var(--teal); font-style:normal; font-size:.7rem; font-weight:800; margin-bottom:6px; }
+    .stamp b { display:block; font-size:.82rem; }
+    .stamp span { display:block; color:var(--muted); font-size:.68rem; margin-top:2px; }
+    .shop { margin:16px 0; display:grid; gap:10px; }
+    .shop-item { border:1px solid rgba(190,190,190,.2); border-radius:18px; overflow:hidden; background:rgba(255,255,255,.04); }
+    .shop-item img { width:100%; height:120px; object-fit:cover; display:block; }
+    .shop-item .body { padding:12px 14px 14px; }
+    .shop-item h3 { margin:0 0 4px; font-size:1.05rem; }
+    .shop-item p { margin:0 0 10px; color:var(--muted); font-size:.82rem; }
+    .shop-pay { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .shop-pay .price { font-weight:800; }
+    .shop-pay a { color:#04110e; background:linear-gradient(135deg,var(--teal),#8ed4c0); text-decoration:none; font-weight:800; border-radius:999px; padding:8px 12px; }
+    .shop-pay .qr { width:88px; height:88px; background:#F0F0F0; border-radius:10px; padding:4px; flex:0 0 88px; }
+    .shop-pay .qr svg { width:100%; height:100%; display:block; }
+    .shop-note { color:var(--muted); font-size:.72rem; margin:8px 0 0; }`;
 }
 
 export function renderBlocksHtml(
@@ -636,6 +751,7 @@ export function renderBlocksHtml(
     ${body}
   </main>
   ${skrLiveScript(options.wallet)}
+  ${options.wallet ? stampsLiveScript() : ""}
 </body>
 </html>`;
 }
@@ -668,7 +784,9 @@ export function draftStorageKey(wallet?: string): string {
 }
 
 export const BLOCK_META: Record<SiteBlockType, { title: string; hint: string }> = {
-  identity: { title: "Identity", hint: "Photo, name, tagline" },
+  identity: { title: "Passport", hint: "Bound .skr identity. One Seeker, one name." },
+  stamps: { title: "Stamps", hint: "Auto-verified from on-chain activity" },
+  shop: { title: "Shop", hint: "Items paid to this wallet, no platform cut" },
   about: { title: "Rich text", hint: "A short bio" },
   richtext: { title: "Rich text", hint: "A longer page section" },
   links: { title: "Links", hint: `Up to ${MAX_LINKS} buttons` },

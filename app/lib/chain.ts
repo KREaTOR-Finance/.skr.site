@@ -16,6 +16,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { kreationPaymentMemo } from "./kreation";
+import { BUNDLE_UPLOAD_RETRY_MESSAGE } from "./uploadSite";
 import { evaluateKreationPayment, type ParsedPaymentTx } from "./kreationPay";
 import { getDomainKey, NameRecordHeader } from "@onsol/tldparser";
 import {
@@ -195,6 +196,10 @@ export function toUserFacingChainError(error: unknown): string {
   const programCode = parseProgramErrorCode(message);
   if (programCode !== null && SKR_PROGRAM_ERROR_BY_CODE[programCode]) {
     return SKR_PROGRAM_ERROR_BY_CODE[programCode];
+  }
+
+  if (message === BUNDLE_UPLOAD_RETRY_MESSAGE || lower.includes("retry publish")) {
+    return BUNDLE_UPLOAD_RETRY_MESSAGE;
   }
 
   const firstLine = message.split("\n")[0]?.trim();

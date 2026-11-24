@@ -29,7 +29,7 @@ describe("multi-page site model", () => {
     expect(home.kind).toBe("home");
     expect(home.slug).toBe("");
     expect(home.title).toBe("Home");
-    expect(home.blocks.map((block) => block.type)).toEqual(["identity", "skr", "links", "about"]);
+    expect(home.blocks.map((block) => block.type)).toEqual(["identity", "stamps", "skr", "shop", "links", "about"]);
     expect(siteDomainName(site)).toBe("creator.skr");
     expect(identityBlock(home.blocks).name).toBe("creator");
   });
@@ -62,6 +62,7 @@ describe("multi-page site model", () => {
       "index.html",
       "about/index.html",
       "projects/index.html",
+      "shop/index.html",
       "blog/index.html",
       "contact/index.html",
       "blog/hello-seeker/index.html",
@@ -71,11 +72,14 @@ describe("multi-page site model", () => {
     const projects = files.find((file) => file.path === "projects/index.html")!.content;
     const contact = files.find((file) => file.path === "contact/index.html")!.content;
     const blog = files.find((file) => file.path === "blog/index.html")!.content;
-    expect(home).toContain('class="site-nav"');
+    expect(home).toContain("site-nav");
     expect(home).toContain("creator");
     expect(home).toContain('href="projects/"');
-    expect(home).not.toContain('site-nav collapse');
-    expect(home).toContain("SEEKER");
+    expect(home).toContain("One Seeker, one name");
+    expect(home).toContain("Seeker-verified");
+    expect(home).toContain("data-stamps-live=");
+    expect(home).toContain("solana:");
+    expect(home).toContain("Pay with Solana Pay");
     expect(projects).toContain("<title>Projects · creator.skr</title>");
     expect(projects).toContain('rel="canonical" href="https://creator.skr.site/projects"');
     expect(projects).toContain('href="../contact/"');
@@ -83,6 +87,10 @@ describe("multi-page site model", () => {
     expect(projects).toContain("Get in touch");
     expect(projects).not.toContain("Live .skr page");
     expect(projects).not.toContain("resolver-toolbar");
+    const shop = files.find((file) => file.path === "shop/index.html")!.content;
+    expect(shop).toContain("1:1 Studio hour");
+    expect(shop).toContain("solana:");
+    expect(shop).toContain("spl-token=");
     expect(contact).toContain('href="mailto:hello@skr.site"');
     expect(blog).toContain("Hello Seeker");
     expect(blog).toContain("blog/hello-seeker/");
@@ -110,7 +118,7 @@ describe("multi-page site model", () => {
     );
     expect(pageFilePath("blog/hello")).toBe("blog/hello/index.html");
     expect(relativeHref("blog/hello", "about")).toBe("../../about/");
-    expect(validateSite(createDefaultSite(""))[0]).toMatch(/Identity/i);
+    expect(validateSite(createDefaultSite(""))[0]).toMatch(/Passport/i);
   });
 });
 
