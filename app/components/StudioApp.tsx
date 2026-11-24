@@ -8,7 +8,6 @@ import {
   createDefaultWalletNotFoundHandler,
   registerMwa,
 } from "@solana-mobile/wallet-standard-mobile";
-import SiteFooter from "@/app/components/SiteFooter";
 import { signAndSendAnsPublishTx, toUserFacingChainError } from "@/app/lib/chain";
 import { createContentUriAndHash } from "@/app/lib/publish";
 import { formatSkr, type SkrProfile } from "@/app/lib/skrProfile";
@@ -266,7 +265,8 @@ export default function StudioApp() {
             </label>
           )}
 
-          <div className="welcome-actions">
+          <p className="fine-print">Publishing signs with Seed Vault on your Seeker. Drafts are saved on this device and work without a wallet.</p>
+          <div className="studio-bar start-bar">
             <button className="btn btn-primary" type="button" onClick={() => void handleConnect().then((ok) => { if (ok) beginStudio(); })} disabled={isConnecting}>
               {isConnecting ? "Connecting..." : "Continue with Seed Vault"}
             </button>
@@ -274,8 +274,6 @@ export default function StudioApp() {
               Preview without connecting
             </button>
           </div>
-          <p className="fine-print">Publishing signs with Seed Vault on your Seeker. Drafts are saved on this device and work without a wallet.</p>
-          <SiteFooter />
         </section>
       )}
 

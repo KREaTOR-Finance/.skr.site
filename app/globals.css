@@ -903,10 +903,8 @@ section,
 }
 
 .studio-shell .site-release {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 8px;
+  position: static;
+  padding-bottom: 8px;
 }
 
 .studio-shell:has(.bottom-nav) .site-release {
@@ -1167,4 +1165,35 @@ section,
 
 .field.compact {
   flex: 1;
+}
+
+.studio-start {
+  padding-bottom: 148px;
+}
+.studio-editor {
+  padding-bottom: 172px;
+}
+.studio-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 28px), 560px);
+  bottom: 12px;
+  margin-top: 0;
+}
+.start-bar {
+  grid-template-columns: 1fr;
+}
+.start-bar .btn-ghost {
+  order: 1;
+}
+.start-bar .btn-primary {
+  order: 0;
+}
+.prompt-line {
+  margin-top: 14px;
+}
+
+.prompt-line textarea {
+  min-height: 72px;
 }
