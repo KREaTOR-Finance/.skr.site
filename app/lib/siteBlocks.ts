@@ -86,6 +86,20 @@ export const TINTS = [
   { id: "gold", value: "#D4AF37", label: "Gold" },
 ] as const;
 
+export type SwipeTypography = "sans" | "display" | "editorial";
+export type SwipeDensity = "comfortable" | "compact";
+export type SwipeBackground = "glass" | "mesh" | "nebula" | "flat";
+export type SwipeStampStyle = "grid" | "stack";
+export type SwipeShopStyle = "rows" | "featured";
+
+export type SiteTheme = {
+  typography: SwipeTypography;
+  density: SwipeDensity;
+  background: SwipeBackground;
+  stampStyle: SwipeStampStyle;
+  shopStyle: SwipeShopStyle;
+};
+
 const ADDABLE: SiteBlockType[] = [
   "richtext", "links", "skr", "stamps", "shop", "image", "gallery", "embed", "cta", "contact", "posts", "socials", "faq",
 ];
@@ -649,16 +663,35 @@ export function skrLiveScript(wallet?: string): string {
 </script>`;
 }
 
-export function sitePageCss(tint: string): string {
+export function sitePageCss(tint: string, theme?: SiteTheme): string {
   const color = sanitizeCssColor(tint);
-  return `:root { --bg:#0A0A0A; --teal:${color}; --chrome:#BEBEBE; --text:#F0F0F0; --muted:#888; }
+  const typography = theme?.typography ?? "sans";
+  const density = theme?.density ?? "comfortable";
+  const background = theme?.background ?? "glass";
+  const font = typography === "editorial"
+    ? 'Georgia, "Times New Roman", serif'
+    : typography === "display"
+      ? 'Syne, "Space Grotesk", Inter, system-ui, sans-serif'
+      : "Inter, system-ui, sans-serif";
+  const pad = density === "compact" ? "4px 16px 18px" : "8px 22px 24px";
+  const bgLayer = background === "mesh"
+    ? "repeating-linear-gradient(135deg,rgba(190,190,190,.06) 0 1px,transparent 1px 18px),"
+    : background === "nebula"
+      ? "radial-gradient(circle at 80% 20%,color-mix(in srgb,var(--teal) 22%,transparent),transparent 36%),radial-gradient(circle at 10% 90%,rgba(139,124,255,.18),transparent 30%),"
+      : background === "flat"
+        ? ""
+        : "radial-gradient(circle at 50% -10%,rgba(232,232,232,.12),transparent 34%),";
+  const extra: string[] = [];
+  if (theme?.stampStyle === "stack") extra.push(".stamp-grid { grid-template-columns:1fr; }");
+  if (theme?.shopStyle === "featured") extra.push(".shop-item:first-of-type { grid-column:1/-1; }");
+  if (theme?.typography === "editorial") extra.push("h1,.page-title { font-style:italic; letter-spacing:-.04em; }");
+  return `:root { --bg:#0A0A0A; --teal:${color}; --chrome:#BEBEBE; --text:#F0F0F0; --muted:#888; --font:${font}; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; color:var(--text); font-family:Inter,system-ui,sans-serif;
-      background:radial-gradient(circle at 50% -10%,rgba(232,232,232,.12),transparent 34%),
-                 radial-gradient(circle at 18% 80%,color-mix(in srgb,var(--teal) 28%,transparent),transparent 32%),var(--bg);
+    body { margin:0; min-height:100vh; color:var(--text); font-family:${font};
+      background:${bgLayer}radial-gradient(circle at 18% 80%,color-mix(in srgb,var(--teal) 28%,transparent),transparent 32%),var(--bg);
       display:flex; flex-direction:column; align-items:center; padding:0 16px 40px; }
     .page { width:min(720px,94vw); margin:0 auto 24px; background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));
-      border:1px solid rgba(190,190,190,.2); border-radius:0 0 28px 28px; padding:8px 22px 24px;
+      border:1px solid rgba(190,190,190,.2); border-radius:0 0 28px 28px; padding:${pad};
       box-shadow:0 22px 80px rgba(0,0,0,.42),0 0 40px color-mix(in srgb,var(--teal) 18%,transparent); }
     .page.solo { border-radius:28px; margin-top:28px; padding:28px 22px 24px; }
     .site-nav { width:min(720px,94vw); margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -724,7 +757,8 @@ export function sitePageCss(tint: string): string {
     .shop-pay a { color:#04110e; background:linear-gradient(135deg,var(--teal),#8ed4c0); text-decoration:none; font-weight:800; border-radius:999px; padding:8px 12px; }
     .shop-pay .qr { width:88px; height:88px; background:#F0F0F0; border-radius:10px; padding:4px; flex:0 0 88px; }
     .shop-pay .qr svg { width:100%; height:100%; display:block; }
-    .shop-note { color:var(--muted); font-size:.72rem; margin:8px 0 0; }`;
+    .shop-note { color:var(--muted); font-size:.72rem; margin:8px 0 0; }
+    ${extra.join("\n    ")}`;
 }
 
 export function renderBlocksHtml(

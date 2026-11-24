@@ -59,8 +59,10 @@ import {
   type StudioSite,
 } from "@/app/lib/sitePages";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter } from "@/app/lib/wallet";
+import { applyDesignToSite, blendKeptDesigns, generateSwipeDeck } from "@/app/lib/swipeDesigns";
+import SwipeBuild, { demoKeepDesigns, type SwipeStep } from "@/app/components/SwipeBuild";
 
-type StudioScreen = "start" | "editor" | "publish" | "receipt";
+type StudioScreen = "start" | "deck" | "picks" | "result" | "editor" | "publish" | "receipt";
 type EditorTab = "edit" | "preview";
 
 const MAINNET_RPC_URLS = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "https://api.mainnet-beta.solana.com")
@@ -85,6 +87,10 @@ export default function StudioApp() {
   const [receiptSignature, setReceiptSignature] = useState<string>("");
   const [profile, setProfile] = useState<SkrProfile | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const [swipePeek, setSwipePeek] = useState(false);
+  const [swipeTweak, setSwipeTweak] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
 
   const activePage = site.pages.find((page) => page.id === activePageId) ?? homePage(site);
   const domain = useMemo(() => siteDomainName(site), [site]);
@@ -122,10 +128,19 @@ export default function StudioApp() {
     const domainParam = params.get("domain")?.replace(/\.skr$/i, "") ?? "";
     if (params.get("demo") === "1") {
       const demo = demoCreatorSite();
-      setSite(demo);
-      setActivePageId(demo.pages[0].id);
+      const step = params.get("swipe") || "deck";
+      const keeps = demoKeepDesigns(generateSwipeDeck());
+      const next = step === "result" || step === "tweak" ? applyDesignToSite(demo, blendKeptDesigns(keeps)) : demo;
+      setSite(next);
+      setActivePageId(next.pages[0].id);
+      setSwipePeek(params.get("peek") === "keep");
+      setSwipeTweak(step === "tweak");
+      setDemoMode(true);
       setDraftHydrated(true);
-      setScreen("editor");
+      if (step === "editor") setScreen("editor");
+      else if (step === "picks") setScreen("picks");
+      else if (step === "result" || step === "tweak") setScreen("result");
+      else setScreen("deck");
       return;
     }
     const saved = readSiteDraft(wallet?.publicKey.toBase58()) ?? readSiteDraft();
@@ -197,7 +212,7 @@ export default function StudioApp() {
     setSite(next);
     setActivePageId(homePage(next).id);
     setTab("edit");
-    setScreen("editor");
+    setScreen("deck");
   }
 
   function siteNameOrDraft(): string {
@@ -271,13 +286,13 @@ export default function StudioApp() {
             <Image src="/brand/skr-logo.jpg" alt=".skr Studio chrome raven logo" width={160} height={160} className="hero-logo brand-logo" priority />
           </div>
           <span className="welcome-kicker">SKR Studio</span>
-          <h1>Build your site at name.skr.site</h1>
-          <p className="lead">Your .skr is a public Seeker ID — and a real website. Start from the card that’s already yours, then add pages.</p>
+          <h1>Swipe to build your .skr site</h1>
+          <p className="lead">Swipe through full-screen looks already filled with your name, stamps, and shop. Keep a few, then blend them into your site.</p>
 
           <article className="starter-card selected">
             <span className="chip">Home</span>
-            <strong>Start from your Seeker ID card</strong>
-            <span>Theme the live card, then add About, Projects, Blog, or any page you need.</span>
+            <strong>Start from your Seeker passport</strong>
+            <span>Keep the looks you like. Blend unlocks after three. Inner pages inherit Home’s colors and type.</span>
           </article>
 
           <label className="field start-prompt">
@@ -297,10 +312,25 @@ export default function StudioApp() {
         </section>
       )}
 
+      {(screen === "deck" || screen === "picks" || screen === "result") && (
+        <SwipeBuild
+          site={site}
+          onSiteChange={setSite}
+          step={screen}
+          onStep={(next: SwipeStep) => setScreen(next)}
+          profile={profile}
+          useDemoStamps={demoMode}
+          peekKeep={swipePeek}
+          openTweak={swipeTweak}
+          onPublish={() => setScreen("publish")}
+          onAdvanced={() => { setTab("edit"); setScreen("editor"); }}
+        />
+      )}
+
       {screen === "editor" && activePage && (
         <section className="studio-editor">
           <header className="editor-top">
-            <button className="btn btn-ghost btn-sm" type="button" onClick={() => setScreen("start")}>Back</button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => setScreen(site.theme ? "result" : "start")}>Back</button>
             <strong>{domain || "your.skr"}</strong>
             <span className="tint-dots">
               {TINTS.map((tint) => (
@@ -474,7 +504,7 @@ export default function StudioApp() {
           <button className="btn btn-primary" type="button" onClick={() => void handlePublish()} disabled={isPublishing || errors.length > 0 || !wallet}>
             {isPublishing ? "Publishing..." : "Review in Seed Vault"}
           </button>
-          <button className="btn btn-ghost" type="button" onClick={() => setScreen("editor")}>Back to editor</button>
+          <button className="btn btn-ghost" type="button" onClick={() => setScreen(site.theme ? "result" : "editor")}>Back to editor</button>
           <p className="fine-print">The base site and block pages stay free. Custom HTML is a 1000 SKR path and publishes with the same hosted name.skr.site bundle.</p>
         </section>
       )}
@@ -501,7 +531,7 @@ export default function StudioApp() {
             </button>
             {receiptUrl ? <a className="btn btn-primary" href={receiptUrl} target="_blank" rel="noreferrer">Open site</a> : null}
           </div>
-          <button className="btn btn-ghost" type="button" onClick={() => setScreen("editor")}>Back to editor</button>
+          <button className="btn btn-ghost" type="button" onClick={() => setScreen(site.theme ? "result" : "editor")}>Back to editor</button>
         </section>
       )}
 

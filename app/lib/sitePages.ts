@@ -21,6 +21,7 @@ import {
   type SiteBlock,
   type SiteBlockType,
   type SiteLink,
+  type SiteTheme,
   type StudioDraft,
 } from "./siteBlocks";
 import { stampsLiveScript } from "./stamps";
@@ -44,6 +45,7 @@ export type SitePage = {
 export type StudioSite = {
   starter: PageStarter;
   pages: SitePage[];
+  theme?: SiteTheme;
 };
 
 export type SiteFile = {
@@ -379,7 +381,7 @@ export function renderPageHtml(
   ${shareImage ? `<meta property="og:image" content="${escapeHtml(shareImage)}" />` : ""}
   <meta property="og:url" content="${escapeHtml(canonical)}" />
   ${favicon}
-  <style>${sitePageCss(identity.tint)}</style>
+  <style>${sitePageCss(identity.tint, site.theme)}</style>
 </head>
 <body>
   ${navMarkup(site, page, domain)}
