@@ -15,33 +15,6 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
       ? result.domain
       : "This .skr needs a second look";
 
-  if (result.status === "published" && result.url) {
-    return (
-      <main className="resolver-shell resolver-frame-shell">
-        <div className="ambient ambient-a" />
-        <div className="ambient ambient-b" />
-        <SiteHeader />
-        <section className="resolver-toolbar">
-          <div>
-            <span className="chip">Live .skr page</span>
-            <h1>{result.domain}</h1>
-          </div>
-          <div className="row">
-            <a className="btn btn-ghost btn-sm" href={studioUrl(result.domain)}>Open Studio</a>
-            <a className="btn btn-primary btn-sm" href={result.url} target="_blank" rel="noopener noreferrer">Open page</a>
-          </div>
-        </section>
-        <iframe
-          title={`${result.domain} public page`}
-          className="resolver-frame"
-          src={result.url}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
-        />
-        <SiteFooter />
-      </main>
-    );
-  }
-
   if (result.status === "empty" && result.owner) {
     const profile = await loadSkrProfile(result.owner).catch(() => ({
       wallet: result.owner!,
@@ -53,7 +26,7 @@ export default async function ResolvePage({ params }: { params: Promise<{ name: 
       guardian: null,
       cooldownEndsAt: null,
       isSeeker: false,
-      updatedAt: Date.now(),
+      updatedAt: 0,
       unavailable: true,
     }));
     return (

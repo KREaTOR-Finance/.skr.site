@@ -14,28 +14,46 @@ import { formatSkr, type SkrProfile } from "@/app/lib/skrProfile";
 import {
   BLOCK_META,
   BLOCK_PAGE_TEMPLATE_ID,
+  MAX_FAQ,
+  MAX_GALLERY,
   MAX_LINKS,
   TINTS,
   addBlock,
   addableTypes,
   applyPromptToBlocks,
-  defaultCardBlocks,
-  draftStorageKey,
   identityBlock,
   moveBlock,
-  publicSiteUrl,
-  readDraft,
   removeBlock,
-  renderBlocksHtml,
-  siteDomain,
-  starterBlocks,
   updateBlock,
-  validateBlocks,
-  writeDraft,
-  type PageStarter,
+  type FaqItem,
+  type GalleryItem,
   type SiteBlock,
   type SiteLink,
 } from "@/app/lib/siteBlocks";
+import {
+  PAGE_STARTERS,
+  addPage,
+  createDefaultSite,
+  demoCreatorSite,
+  homePage,
+  movePage,
+  readSiteDraft,
+  removePage,
+  renamePage,
+  renderPageHtml,
+  renderSiteBundle,
+  setPageInNav,
+  setSiteName,
+  siteDomainName,
+  sitePublicUrl,
+  updatePage,
+  updatePageBlocks,
+  updatePageSlug,
+  validateSite,
+  writeSiteDraft,
+  type SitePage,
+  type StudioSite,
+} from "@/app/lib/sitePages";
 import { connectWallet, walletAddressShort, type BrowserWalletAdapter } from "@/app/lib/wallet";
 
 type StudioScreen = "start" | "editor" | "publish" | "receipt";
@@ -47,22 +65,13 @@ const MAINNET_RPC_URLS = (process.env.NEXT_PUBLIC_SOLANA_RPC_URLS ?? "https://ap
   .filter(Boolean);
 const SOLANA_CHAIN = process.env.NEXT_PUBLIC_SOLANA_CHAIN === "devnet" ? "solana:devnet" : "solana:mainnet";
 
-const STARTERS: { id: PageStarter; chip: string; title: string; body: string }[] = [
-  { id: "card", chip: "Recommended", title: "Start from your Seeker ID card", body: "Theme the card that’s already live — photo, tagline, links, tint — then add sections." },
-  { id: "profile", chip: "Templates", title: "Profile page", body: "Identity, about, SKR totals, links, and socials." },
-  { id: "links", chip: "Templates", title: "Links page", body: "A tight page of buttons, socials, and a call to action." },
-  { id: "project", chip: "Templates", title: "Project page", body: "About, an image, and a main button for the work you’re showing." },
-  { id: "shop", chip: "Templates", title: "Shop teaser", body: "A simple storefront teaser — not a full catalog." },
-  { id: "event", chip: "Templates", title: "Event page", body: "A short announcement with a button to join or RSVP." },
-  { id: "prompt", chip: "Prompt", title: "Describe the page", body: "Type what you want. Local preview is free. Grok stays an advanced option." },
-];
-
 export default function StudioApp() {
   const [screen, setScreen] = useState<StudioScreen>("start");
   const [tab, setTab] = useState<EditorTab>("edit");
-  const [starter, setStarter] = useState<PageStarter>("card");
-  const [blocks, setBlocks] = useState<SiteBlock[]>(() => defaultCardBlocks());
+  const [site, setSite] = useState<StudioSite>(() => createDefaultSite());
+  const [activePageId, setActivePageId] = useState<string>(() => createDefaultSite().pages[0].id);
   const [openBlockId, setOpenBlockId] = useState<string | null>(null);
+  const [addingPage, setAddingPage] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [wallet, setWallet] = useState<BrowserWalletAdapter | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -73,13 +82,19 @@ export default function StudioApp() {
   const [profile, setProfile] = useState<SkrProfile | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
+  const activePage = site.pages.find((page) => page.id === activePageId) ?? homePage(site);
+  const domain = useMemo(() => siteDomainName(site), [site]);
+  const errors = useMemo(() => validateSite(site), [site]);
+  const blocks = activePage?.blocks ?? [];
+  const canAdd = addableTypes(blocks);
+  const previewHtml = useMemo(
+    () => (activePage ? renderPageHtml(site, activePage, { wallet: wallet?.publicKey.toBase58(), isSeeker: profile?.isSeeker }) : ""),
+    [site, activePage, wallet, profile],
+  );
+
   useEffect(() => {
     registerMwa({
-      appIdentity: {
-        name: ".skr Studio",
-        uri: "https://skr.site",
-        icon: "/icon.jpg",
-      },
+      appIdentity: { name: ".skr Studio", uri: "https://skr.site", icon: "/icon.jpg" },
       authorizationCache: createDefaultAuthorizationCache(),
       chains: [SOLANA_CHAIN],
       chainSelector: createDefaultChainSelector(),
@@ -96,25 +111,32 @@ export default function StudioApp() {
   useEffect(() => {
     if (draftHydrated) return;
     const params = new URLSearchParams(window.location.search);
-    const domain = params.get("domain")?.replace(/\.skr$/i, "") ?? "";
-    const walletKey = wallet?.publicKey.toBase58();
-    const saved = readDraft(draftStorageKey(walletKey)) ?? readDraft(draftStorageKey());
-    if (saved?.blocks?.length) {
-      const named = domain
-        ? saved.blocks.map((block) => (block.type === "identity" ? { ...block, name: domain } : block))
-        : saved.blocks;
-      setBlocks(named);
-      setStarter(saved.starter ?? "card");
-    } else if (domain) {
-      setBlocks(defaultCardBlocks(domain));
+    const domainParam = params.get("domain")?.replace(/\.skr$/i, "") ?? "";
+    if (params.get("demo") === "1") {
+      const demo = demoCreatorSite();
+      setSite(demo);
+      setActivePageId(demo.pages[0].id);
+      setDraftHydrated(true);
+      setScreen("editor");
+      return;
+    }
+    const saved = readSiteDraft(wallet?.publicKey.toBase58()) ?? readSiteDraft();
+    if (saved?.pages?.length) {
+      const next = domainParam ? setSiteName(saved, domainParam) : saved;
+      setSite(next);
+      setActivePageId(homePage(next).id);
+    } else if (domainParam) {
+      const next = createDefaultSite(domainParam);
+      setSite(next);
+      setActivePageId(next.pages[0].id);
     }
     setDraftHydrated(true);
   }, [wallet, draftHydrated]);
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeDraft(draftStorageKey(wallet?.publicKey.toBase58()), { starter, blocks });
-  }, [blocks, starter, wallet, draftHydrated]);
+    writeSiteDraft(site, wallet?.publicKey.toBase58());
+  }, [site, wallet, draftHydrated]);
 
   useEffect(() => {
     if (!wallet) {
@@ -136,13 +158,10 @@ export default function StudioApp() {
     };
   }, [wallet]);
 
-  const domain = useMemo(() => siteDomain(blocks), [blocks]);
-  const errors = useMemo(() => validateBlocks(blocks), [blocks]);
-  const previewHtml = useMemo(
-    () => renderBlocksHtml(blocks, { wallet: wallet?.publicKey.toBase58() }),
-    [blocks, wallet],
-  );
-  const canAdd = addableTypes(blocks);
+  function patchBlocks(nextBlocks: SiteBlock[]) {
+    if (!activePage) return;
+    setSite(updatePageBlocks(site, activePage.id, nextBlocks));
+  }
 
   async function handleConnect(): Promise<boolean> {
     setIsConnecting(true);
@@ -159,28 +178,31 @@ export default function StudioApp() {
     }
   }
 
-  function beginStudio(nextStarter: PageStarter = starter) {
-    const name = identityBlock(blocks).name;
-    const keepDraft = nextStarter === starter && draftHydrated && blocks.length > 0;
-    if (!keepDraft) {
-      let nextBlocks = starterBlocks(nextStarter, name);
-      if (nextStarter === "prompt" && prompt.trim()) {
-        nextBlocks = applyPromptToBlocks(nextBlocks, prompt);
-      }
-      setBlocks(nextBlocks);
-      setOpenBlockId(nextBlocks[0]?.id ?? null);
-    } else if (nextStarter === "prompt" && prompt.trim()) {
-      setBlocks((current) => applyPromptToBlocks(current, prompt, { name }));
+  function beginStudio() {
+    const name = siteNameOrDraft();
+    const keepDraft = draftHydrated && site.pages.length > 0 && (homePage(site).blocks.length > 0);
+    let next = keepDraft ? site : createDefaultSite(name, "card");
+    if (prompt.trim()) {
+      const home = homePage(next);
+      next = updatePageBlocks(next, home.id, applyPromptToBlocks(home.blocks, prompt, { name }));
     }
-    setStarter(nextStarter);
+    setSite(next);
+    setActivePageId(homePage(next).id);
     setTab("edit");
     setScreen("editor");
   }
 
-  function applyPrompt() {
-    if (!prompt.trim()) return;
-    setBlocks((current) => applyPromptToBlocks(current, prompt, { name: identityBlock(current).name }));
-    setToast("Updated your blocks from the prompt");
+  function siteNameOrDraft(): string {
+    return identityBlock(homePage(site)?.blocks ?? []).name;
+  }
+
+  function handleAddPage(starterId: string) {
+    const next = addPage(site, { starterId });
+    const added = next.pages[next.pages.length - 1];
+    setSite(next);
+    setActivePageId(added.id);
+    setAddingPage(false);
+    setOpenBlockId(added.blocks[0]?.id ?? null);
   }
 
   async function handlePublish() {
@@ -194,12 +216,12 @@ export default function StudioApp() {
     }
     setIsPublishing(true);
     try {
-      const html = renderBlocksHtml(blocks, { wallet: wallet.publicKey.toBase58() });
-      const pageDomain = siteDomain(blocks);
-      const uploaded = await createContentUriAndHash(html, {
-        domain: pageDomain,
-        templateId: BLOCK_PAGE_TEMPLATE_ID,
+      const files = renderSiteBundle(site, {
+        wallet: wallet.publicKey.toBase58(),
+        isSeeker: profile?.isSeeker,
       });
+      const pageDomain = siteDomainName(site);
+      const uploaded = await uploadSiteOrHtml(files, pageDomain);
       const signature = await signAndSendAnsPublishTx({
         rpcUrls: MAINNET_RPC_URLS,
         wallet,
@@ -210,17 +232,17 @@ export default function StudioApp() {
           contentHash: uploaded.contentHash,
           isPremium: false,
           metadata: {
-            source: "skr-studio-blocks-v1",
+            source: "skr-studio-site-v2",
             template: BLOCK_PAGE_TEMPLATE_ID,
             url: uploaded.publicUrl,
             ...uploaded.metadataRecords,
-            ...(identityBlock(blocks).photoUrl ? { pic: identityBlock(blocks).photoUrl } : {}),
+            ...(siteIdentityPhoto(site) ? { pic: siteIdentityPhoto(site) } : {}),
           },
         },
       });
       setReceiptSignature(signature);
-      setReceiptUrl(publicSiteUrl(blocks) || uploaded.publicUrl);
-      setToast("Your .skr page is live");
+      setReceiptUrl(sitePublicUrl(site) || uploaded.publicUrl);
+      setToast("Your .skr site is live");
       setScreen("receipt");
     } catch (error) {
       setToast(toUserFacingChainError(error));
@@ -241,31 +263,20 @@ export default function StudioApp() {
           </div>
           <span className="welcome-kicker">SKR Studio</span>
           <h1>Build your site at name.skr.site</h1>
-          <p className="lead">Your .skr is a public Seeker ID — and your own website. Start from the card that’s already yours.</p>
+          <p className="lead">Your .skr is a public Seeker ID — and a real website. Start from the card that’s already yours, then add pages.</p>
 
-          <div className="starter-list">
-            {STARTERS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`starter-card${starter === item.id ? " selected" : ""}`}
-                onClick={() => setStarter(item.id)}
-              >
-                <span className="chip">{item.chip}</span>
-                <strong>{item.title}</strong>
-                <span>{item.body}</span>
-              </button>
-            ))}
-          </div>
+          <article className="starter-card selected">
+            <span className="chip">Home</span>
+            <strong>Start from your Seeker ID card</strong>
+            <span>Theme the live card, then add About, Projects, Blog, or any page you need.</span>
+          </article>
 
-          {starter === "prompt" && (
-            <label className="field start-prompt">
-              Describe the page
-              <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A short Seeker profile with my X link and a teal tint." />
-            </label>
-          )}
+          <label className="field start-prompt">
+            Optional: describe a change
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A short Seeker profile with my X link and a teal tint." />
+          </label>
 
-          <p className="fine-print">Publishing signs with Seed Vault on your Seeker. Drafts are saved on this device and work without a wallet.</p>
+          <p className="fine-print">Publishing signs with Seed Vault on your Seeker. Drafts are saved on this device and work without a wallet. The base site stays free.</p>
           <div className="studio-bar start-bar">
             <button className="btn btn-primary" type="button" onClick={() => void handleConnect().then((ok) => { if (ok) beginStudio(); })} disabled={isConnecting}>
               {isConnecting ? "Connecting..." : "Continue with Seed Vault"}
@@ -277,7 +288,7 @@ export default function StudioApp() {
         </section>
       )}
 
-      {screen === "editor" && (
+      {screen === "editor" && activePage && (
         <section className="studio-editor">
           <header className="editor-top">
             <button className="btn btn-ghost btn-sm" type="button" onClick={() => setScreen("start")}>Back</button>
@@ -291,8 +302,9 @@ export default function StudioApp() {
                   style={{ background: tint.value }}
                   aria-label={tint.label}
                   onClick={() => {
-                    const identity = identityBlock(blocks);
-                    setBlocks(updateBlock(blocks, { ...identity, tint: tint.value }));
+                    const home = homePage(site);
+                    const identity = identityBlock(home.blocks);
+                    setSite(updatePageBlocks(site, home.id, updateBlock(home.blocks, { ...identity, tint: tint.value })));
                   }}
                 />
               ))}
@@ -306,8 +318,50 @@ export default function StudioApp() {
 
           {tab === "edit" && (
             <>
-              <MiniPreview blocks={blocks} profile={profile} />
-              <h3 className="block-heading">Blocks</h3>
+              <h3 className="block-heading">Pages</h3>
+              <div className="page-strip">
+                {site.pages.map((page) => (
+                  <button
+                    key={page.id}
+                    type="button"
+                    className={`page-chip${page.id === activePage.id ? " on" : ""}`}
+                    onClick={() => { setActivePageId(page.id); setAddingPage(false); setOpenBlockId(null); }}
+                  >
+                    <strong>{page.title}</strong>
+                    <small>{page.slug ? `/${page.slug}` : "/"}</small>
+                  </button>
+                ))}
+                <button type="button" className="page-add" onClick={() => setAddingPage((open) => !open)}>+</button>
+              </div>
+
+              {addingPage && (
+                <div className="add-page-panel">
+                  {PAGE_STARTERS.map((item) => (
+                    <button key={item.id} type="button" className="btn btn-ghost btn-sm" onClick={() => handleAddPage(item.id)}>
+                      {item.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <PageSettings
+                page={activePage}
+                onRename={(title) => setSite(renamePage(site, activePage.id, title))}
+                onSlug={(slug) => setSite(updatePageSlug(site, activePage.id, slug))}
+                onNav={(inNav) => setSite(setPageInNav(site, activePage.id, inNav))}
+                onDescription={(description) => setSite(updatePage(site, { ...activePage, description }))}
+                onShareImage={(shareImage) => setSite(updatePage(site, { ...activePage, shareImage }))}
+                onMove={(direction) => setSite(movePage(site, activePage.id, direction))}
+                onRemove={() => {
+                  const next = removePage(site, activePage.id);
+                  setSite(next);
+                  setActivePageId(homePage(next).id);
+                }}
+              />
+
+              {activePage.kind === "home" && <MiniPreview blocks={blocks} profile={profile} domain={domain} />}
+
+              <h3 className="block-heading">Blocks on {activePage.title}</h3>
               <div className="block-list">
                 {blocks.map((block, index) => (
                   <article key={block.id} className={`block-item${openBlockId === block.id ? " open" : ""}`}>
@@ -319,15 +373,15 @@ export default function StudioApp() {
                     </button>
                     {block.type !== "identity" && (
                       <div className="block-move">
-                        <button type="button" className="btn btn-ghost btn-sm" disabled={index <= 1} onClick={() => setBlocks(moveBlock(blocks, block.id, -1))}>Up</button>
-                        <button type="button" className="btn btn-ghost btn-sm" disabled={index >= blocks.length - 1} onClick={() => setBlocks(moveBlock(blocks, block.id, 1))}>Down</button>
+                        <button type="button" className="btn btn-ghost btn-sm" disabled={index <= (blocks[0]?.type === "identity" ? 1 : 0)} onClick={() => patchBlocks(moveBlock(blocks, block.id, -1))}>Up</button>
+                        <button type="button" className="btn btn-ghost btn-sm" disabled={index >= blocks.length - 1} onClick={() => patchBlocks(moveBlock(blocks, block.id, 1))}>Down</button>
                       </div>
                     )}
                     {openBlockId === block.id && (
                       <div className="block-body">
-                        <BlockFields block={block} onChange={(next) => setBlocks(updateBlock(blocks, next))} />
+                        <BlockFields block={block} onChange={(next) => patchBlocks(updateBlock(blocks, next))} />
                         {block.type !== "identity" && (
-                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setBlocks(removeBlock(blocks, block.id))}>Remove block</button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchBlocks(removeBlock(blocks, block.id))}>Remove block</button>
                         )}
                       </div>
                     )}
@@ -337,7 +391,7 @@ export default function StudioApp() {
               {canAdd.length > 0 && (
                 <div className="add-block-row">
                   {canAdd.map((type) => (
-                    <button key={type} type="button" className="btn btn-ghost btn-sm" onClick={() => setBlocks(addBlock(blocks, type))}>
+                    <button key={type} type="button" className="btn btn-ghost btn-sm" onClick={() => patchBlocks(addBlock(blocks, type))}>
                       + {BLOCK_META[type].title}
                     </button>
                   ))}
@@ -347,7 +401,18 @@ export default function StudioApp() {
                 Describe a change
                 <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Make the tagline shorter and add https://x.com/you" />
               </label>
-              <button className="btn btn-ghost" type="button" onClick={applyPrompt} disabled={!prompt.trim()}>Update blocks from prompt</button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  if (!prompt.trim() || !activePage) return;
+                  patchBlocks(applyPromptToBlocks(blocks, prompt, { name: siteNameOrDraft() }));
+                  setToast("Updated this page from the prompt");
+                }}
+                disabled={!prompt.trim()}
+              >
+                Update blocks from prompt
+              </button>
             </>
           )}
 
@@ -360,7 +425,7 @@ export default function StudioApp() {
               {tab === "preview" ? "Edit" : "Preview"}
             </button>
             <button className="btn btn-primary" type="button" onClick={() => setScreen("publish")}>
-              Publish to {domain || "your.skr.site"}
+              Publish to {domain ? `${domain.replace(/\.skr$/, "")}.skr.site` : "your.skr.site"}
             </button>
           </div>
         </section>
@@ -368,12 +433,12 @@ export default function StudioApp() {
 
       {screen === "publish" && (
         <section className="panel card-glow publish-card">
-          <span className="chip">Free block page</span>
+          <span className="chip">Free site</span>
           <h2>Publish {domain || "your.skr"}</h2>
-          <p>Seed Vault will ask you to approve an AllDomains record update. This path does not use the custom SKR program.</p>
+          <p>Seed Vault will ask you to approve an AllDomains record update. This path does not use the custom SKR program. Your site is a bundle of pages, and the url record will point at the site root.</p>
           <div className="wallet-box">
-            <span>Page: block site at {domain || "your.skr.site"}</span>
-            <span>Storage: Arweave or IPFS via the Studio uploader</span>
+            <span>Pages: {site.pages.map((page) => page.slug ? `/${page.slug}` : "/").join(", ")}</span>
+            <span>Storage: Arweave path manifest (IPFS directory fallback)</span>
             <span>SKR unlock: not required</span>
             <span>Network fee: a small amount of SOL</span>
             <span>Wallet: {wallet ? walletAddressShort(wallet.publicKey.toBase58()) : "Not connected"}</span>
@@ -400,8 +465,8 @@ export default function StudioApp() {
       {screen === "receipt" && (
         <section className="panel card-glow publish-card">
           <span className="chip">Live</span>
-          <h2>Your page is live</h2>
-          <p>Anyone can open your .skr site from this link.</p>
+          <h2>Your site is live</h2>
+          <p>Anyone can open your .skr site from this link, including inner pages like /about.</p>
           <div className="wallet-box">
             <strong>{receiptUrl}</strong>
             {receiptSignature ? <span className="mono">Confirmation: {receiptSignature}</span> : null}
@@ -417,7 +482,7 @@ export default function StudioApp() {
             >
               Copy link
             </button>
-            {receiptUrl ? <a className="btn btn-primary" href={receiptUrl} target="_blank" rel="noreferrer">Open page</a> : null}
+            {receiptUrl ? <a className="btn btn-primary" href={receiptUrl} target="_blank" rel="noreferrer">Open site</a> : null}
           </div>
           <button className="btn btn-ghost" type="button" onClick={() => setScreen("editor")}>Back to editor</button>
         </section>
@@ -428,33 +493,72 @@ export default function StudioApp() {
   );
 }
 
+function siteIdentityPhoto(site: StudioSite): string {
+  return identityBlock(homePage(site).blocks).photoUrl;
+}
+
+async function uploadSiteOrHtml(files: ReturnType<typeof renderSiteBundle>, domain: string) {
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      domain,
+      templateId: BLOCK_PAGE_TEMPLATE_ID,
+      files: files.map((file) => ({ path: file.path, content: file.content, contentType: file.contentType })),
+    }),
+  });
+  if (response.ok) {
+    const parsed = await response.json() as { contentUri: string; publicUrl: string; contentHash?: string; metadataRecords: Record<string, string> };
+    if (parsed.contentUri && parsed.publicUrl && parsed.metadataRecords) {
+      return {
+        contentUri: parsed.contentUri,
+        publicUrl: parsed.publicUrl.endsWith("/") ? parsed.publicUrl : `${parsed.publicUrl}/`,
+        contentHash: parsed.contentHash ?? "",
+        metadataRecords: parsed.metadataRecords,
+      };
+    }
+  }
+  // Fallback keeps single-file upload available if the bundle endpoint isn't configured yet.
+  const home = files.find((file) => file.path === "index.html");
+  if (!home) throw new Error(await response.text() || "Upload failed");
+  const uploaded = await createContentUriAndHash(home.content, { domain, templateId: BLOCK_PAGE_TEMPLATE_ID });
+  return uploaded;
+}
+
 function blockSummary(block: SiteBlock, profile: SkrProfile | null): string {
   switch (block.type) {
     case "identity":
       return block.name ? `${block.name}.skr` : BLOCK_META.identity.hint;
     case "about":
-      return block.text.trim() ? block.text.trim().slice(0, 48) : "Tap to add a short bio";
+    case "richtext":
+      return block.text.trim() ? block.text.trim().slice(0, 48) : "Tap to add text";
     case "links":
       return `${block.items.filter((item) => item.label || item.url).length} of ${MAX_LINKS}`;
     case "skr":
-      return block.enabled
-        ? (profile ? `${formatSkr(profile.total)} SKR · on` : "Live on-chain · on")
-        : "Hidden";
+      return block.enabled ? (profile ? `${formatSkr(profile.total)} SKR · on` : "Live on-chain · on") : "Hidden";
     case "image":
       return block.url ? "Image added" : BLOCK_META.image.hint;
+    case "gallery":
+      return `${block.items.filter((item) => item.url).length} of ${MAX_GALLERY}`;
+    case "embed":
+      return block.url || BLOCK_META.embed.hint;
     case "cta":
       return block.label || BLOCK_META.cta.hint;
+    case "contact":
+      return block.email || "mailto fallback";
+    case "posts":
+      return block.heading || BLOCK_META.posts.hint;
     case "socials":
       return `${block.items.filter((item) => item.label || item.url).length} of ${MAX_LINKS}`;
+    case "faq":
+      return `${block.items.filter((item) => item.question).length} of ${MAX_FAQ}`;
   }
 }
 
-function MiniPreview({ blocks, profile }: { blocks: SiteBlock[]; profile: SkrProfile | null }) {
+function MiniPreview({ blocks, profile, domain }: { blocks: SiteBlock[]; profile: SkrProfile | null; domain: string }) {
   const identity = identityBlock(blocks);
-  const about = blocks.find((block) => block.type === "about");
-  const links = blocks.find((block) => block.type === "links");
+  const about = blocks.find((block) => block.type === "about" || block.type === "richtext");
   const skr = blocks.find((block) => block.type === "skr");
-  const domain = siteDomain(blocks) || "your.skr";
   return (
     <article className="mini-preview panel card-glow" style={{ borderColor: identity.tint }}>
       {identity.photoUrl ? (
@@ -463,7 +567,7 @@ function MiniPreview({ blocks, profile }: { blocks: SiteBlock[]; profile: SkrPro
       ) : (
         <div className="seeker-id-knot" aria-hidden="true" />
       )}
-      <span className="chip">{domain}</span>
+      <span className="chip">{domain || "your.skr"}</span>
       <h2>{identity.name || "your"}.skr</h2>
       <p>{identity.tagline || "Seeker ID"}</p>
       {skr?.type === "skr" && skr.enabled && (
@@ -472,15 +576,53 @@ function MiniPreview({ blocks, profile }: { blocks: SiteBlock[]; profile: SkrPro
           <span>SKR</span>
         </div>
       )}
-      {about?.type === "about" && about.text.trim() ? <p>{about.text}</p> : null}
-      {links?.type === "links" && links.items.some((item) => item.label) && (
-        <div className="preview-links">
-          {links.items.filter((item) => item.label || item.url).slice(0, 5).map((item) => (
-            <span key={`${item.label}-${item.url}`}>{item.label || item.url}</span>
-          ))}
+      {about && "text" in about && about.text.trim() ? <p>{about.text}</p> : null}
+    </article>
+  );
+}
+
+function PageSettings({
+  page, onRename, onSlug, onNav, onDescription, onShareImage, onMove, onRemove,
+}: {
+  page: SitePage;
+  onRename: (title: string) => void;
+  onSlug: (slug: string) => void;
+  onNav: (inNav: boolean) => void;
+  onDescription: (description: string) => void;
+  onShareImage: (url: string) => void;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="page-settings">
+      <label className="field compact">
+        Page title
+        <input value={page.title} onChange={(event) => onRename(event.target.value)} />
+      </label>
+      <label className="field compact">
+        Path
+        <input value={page.kind === "home" ? "/" : `/${page.slug}`} onChange={(event) => onSlug(event.target.value)} disabled={page.kind === "home"} />
+      </label>
+      <label className="field compact">
+        SEO description
+        <input value={page.description} onChange={(event) => onDescription(event.target.value)} placeholder="Optional" />
+      </label>
+      <label className="field compact">
+        Share image URL
+        <input value={page.shareImage} onChange={(event) => onShareImage(event.target.value)} placeholder="https://" />
+      </label>
+      {page.kind !== "home" && (
+        <div className="row">
+          <label className="skr-toggle">
+            <input type="checkbox" checked={page.inNav} onChange={(event) => onNav(event.target.checked)} />
+            Show in nav
+          </label>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMove(-1)}>Up</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMove(1)}>Down</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove}>Remove page</button>
         </div>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -505,11 +647,80 @@ function LinkEditor({ items, onChange }: { items: SiteLink[]; onChange: (items: 
             URL
             <input
               value={item.url}
-              placeholder="https://"
+              placeholder="https:// or /about"
               onChange={(event) => {
                 const next = [...items];
                 next[index] = { ...(next[index] ?? { label: "", url: "" }), url: event.target.value };
                 onChange(next.filter((entry) => entry.label || entry.url));
+              }}
+            />
+          </label>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GalleryEditor({ items, onChange }: { items: GalleryItem[]; onChange: (items: GalleryItem[]) => void }) {
+  const rows = items.length < MAX_GALLERY ? [...items, { url: "", alt: "" }] : items;
+  return (
+    <div className="stack">
+      {rows.slice(0, MAX_GALLERY).map((item, index) => (
+        <div className="row" key={`g-${index}`}>
+          <label className="field compact">
+            Image URL
+            <input
+              value={item.url}
+              placeholder="https://"
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { url: "", alt: "" }), url: event.target.value };
+                onChange(next.filter((entry) => entry.url || entry.alt));
+              }}
+            />
+          </label>
+          <label className="field compact">
+            Alt
+            <input
+              value={item.alt}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { url: "", alt: "" }), alt: event.target.value };
+                onChange(next.filter((entry) => entry.url || entry.alt));
+              }}
+            />
+          </label>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (items: FaqItem[]) => void }) {
+  const rows = items.length < MAX_FAQ ? [...items, { question: "", answer: "" }] : items;
+  return (
+    <div className="stack">
+      {rows.slice(0, MAX_FAQ).map((item, index) => (
+        <div className="stack" key={`f-${index}`}>
+          <label className="field">
+            Question
+            <input
+              value={item.question}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { question: "", answer: "" }), question: event.target.value };
+                onChange(next.filter((entry) => entry.question || entry.answer));
+              }}
+            />
+          </label>
+          <label className="field">
+            Answer
+            <textarea
+              value={item.answer}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...(next[index] ?? { question: "", answer: "" }), answer: event.target.value };
+                onChange(next.filter((entry) => entry.question || entry.answer));
               }}
             />
           </label>
@@ -539,13 +750,15 @@ function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: 
         </>
       );
     case "about":
+    case "richtext":
       return (
         <label className="field">
-          About
+          Text
           <textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} />
         </label>
       );
     case "links":
+    case "socials":
       return <LinkEditor items={block.items} onChange={(items) => onChange({ ...block, items })} />;
     case "skr":
       return (
@@ -567,6 +780,15 @@ function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: 
           </label>
         </>
       );
+    case "gallery":
+      return <GalleryEditor items={block.items} onChange={(items) => onChange({ ...block, items })} />;
+    case "embed":
+      return (
+        <label className="field">
+          YouTube, X, or Spotify URL
+          <input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="https://" />
+        </label>
+      );
     case "cta":
       return (
         <>
@@ -576,11 +798,31 @@ function BlockFields({ block, onChange }: { block: SiteBlock; onChange: (block: 
           </label>
           <label className="field">
             Button link
-            <input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="https://" />
+            <input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="https:// or /contact" />
           </label>
         </>
       );
-    case "socials":
-      return <LinkEditor items={block.items} onChange={(items) => onChange({ ...block, items })} />;
+    case "contact":
+      return (
+        <>
+          <label className="field">
+            Email
+            <input value={block.email} onChange={(event) => onChange({ ...block, email: event.target.value })} placeholder="you@email.com" />
+          </label>
+          <label className="field">
+            Button label
+            <input value={block.buttonLabel} onChange={(event) => onChange({ ...block, buttonLabel: event.target.value })} />
+          </label>
+        </>
+      );
+    case "posts":
+      return (
+        <label className="field">
+          Heading
+          <input value={block.heading} onChange={(event) => onChange({ ...block, heading: event.target.value })} />
+        </label>
+      );
+    case "faq":
+      return <FaqEditor items={block.items} onChange={(items) => onChange({ ...block, items })} />;
   }
 }

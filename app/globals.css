@@ -1197,3 +1197,62 @@ section,
 .prompt-line textarea {
   min-height: 72px;
 }
+
+.page-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-chip,
+.page-add {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 2px;
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page-chip small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.page-chip.on {
+  border-color: color-mix(in srgb, var(--teal) 70%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--teal) 40%, transparent);
+}
+
+.page-add {
+  min-width: 48px;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--teal);
+  border-style: dashed;
+}
+
+.add-page-panel,
+.page-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.page-settings {
+  padding: 10px 0 4px;
+}
+
+.page-settings .field {
+  flex: 1 1 140px;
+}
